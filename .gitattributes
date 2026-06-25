@@ -1,0 +1,12 @@
+* text=auto
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.bmp  binary
+*.tiff binary
+*.ico  binary
+*.ttf  binary
+*.woff binary
+*.woff2 binary
