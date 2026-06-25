@@ -1,0 +1,13 @@
+# binarios compilados — regenerar con .\build.ps1
+folio.exe
+folio-debug.exe
+
+# recurso de icono generado desde folio.ico — lo crea build.ps1
+rsrc.syso
+
+# salida de render de los tests
+testdocs/*.out.html
+
+# temporales
+*.log
+*.tmp

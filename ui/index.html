@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Folio</title>
+<link rel="stylesheet" href="/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="/chroma.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="empty no-doc">
+
+  <!-- bordes invisibles para redimensionar (frameless) -->
+  <div class="rsz rsz-t"  data-dir="t"></div>
+  <div class="rsz rsz-b"  data-dir="b"></div>
+  <div class="rsz rsz-l"  data-dir="l"></div>
+  <div class="rsz rsz-r"  data-dir="r"></div>
+  <div class="rsz rsz-tl" data-dir="tl"></div>
+  <div class="rsz rsz-tr" data-dir="tr"></div>
+  <div class="rsz rsz-bl" data-dir="bl"></div>
+  <div class="rsz rsz-br" data-dir="br"></div>
+
+  <!-- barra de titulo propia -->
+  <header id="titlebar">
+    <div class="tb-left"></div>
+
+    <div class="tb-center" id="caption">
+      <span class="name" id="capName"></span>
+      <span class="live" id="capLive" title="Recarga en vivo activa"></span>
+    </div>
+
+    <div class="tb-right">
+      <button class="tbtn" id="btnOutline" title="Índice (T)" tabindex="-1">
+        <svg width="15" height="15" viewBox="0 0 16 16"><line x1="3" y1="4" x2="13" y2="4"/><line x1="3" y1="8" x2="11" y2="8"/><line x1="3" y1="12" x2="9" y2="12"/></svg>
+      </button>
+      <button class="tbtn" id="btnFind" title="Buscar (Ctrl F)" tabindex="-1">
+        <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.2"/><line x1="10.2" y1="10.2" x2="13.5" y2="13.5"/></svg>
+      </button>
+      <button class="tbtn" id="btnOpen" title="Abrir (Ctrl O)" tabindex="-1">
+        <svg width="15" height="15" viewBox="0 0 16 16"><path d="M2.5 4.5a1 1 0 0 1 1-1H7l1.4 1.6H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1Z"/></svg>
+      </button>
+      <span class="tb-sep"></span>
+      <button class="winbtn" id="btnMin" title="Minimizar" tabindex="-1">
+        <svg width="11" height="11" viewBox="0 0 11 11"><line x1="1.5" y1="5.5" x2="9.5" y2="5.5"/></svg>
+      </button>
+      <button class="winbtn" id="btnMax" title="Maximizar" tabindex="-1">
+        <svg class="ico-max" width="11" height="11" viewBox="0 0 11 11"><rect x="1.5" y="1.5" width="8" height="8" rx="1.2"/></svg>
+        <svg class="ico-rst" width="11" height="11" viewBox="0 0 11 11"><rect x="1.5" y="3" width="6.5" height="6.5" rx="1.1"/><path d="M3.6 3V2.2a1 1 0 0 1 1-1h4.2a1 1 0 0 1 1 1v4.2a1 1 0 0 1-1 1H8.2"/></svg>
+      </button>
+      <button class="winbtn winbtn-close" id="btnClose" title="Cerrar" tabindex="-1">
+        <svg width="11" height="11" viewBox="0 0 11 11"><line x1="1.8" y1="1.8" x2="9.2" y2="9.2"/><line x1="9.2" y1="1.8" x2="1.8" y2="9.2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- barra de progreso de lectura -->
+  <div id="progress"><span id="progressBar"></span></div>
+
+  <!-- splash de arranque: cubre el área mientras WebView2 arranca y el doc se pinta; se funde al estar listo -->
+  <div id="splash">
+    <div class="splash-mark" aria-hidden="true">
+      <svg width="86" height="86" viewBox="0 0 100 100">
+        <path class="s-page" d="M27 11 H61 L81 31 V89 H27 Z"/>
+        <path class="s-fold" d="M61 11 V31 H81 Z"/>
+        <line class="s-ln" x1="37" y1="46" x2="71" y2="46"/>
+        <line class="s-ln" x1="37" y1="58" x2="71" y2="58"/>
+        <line class="s-ln" x1="37" y1="70" x2="58" y2="70"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- barra de busqueda -->
+  <div id="findbar">
+    <svg class="find-ico" width="13" height="13" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.2"/><line x1="10.2" y1="10.2" x2="13.5" y2="13.5"/></svg>
+    <input id="findInput" type="text" placeholder="Buscar…" spellcheck="false" autocomplete="off">
+    <span id="findCount" class="find-count"></span>
+    <button id="findPrev" class="find-nav" title="Anterior (Shift Enter)" tabindex="-1">
+      <svg width="12" height="12" viewBox="0 0 16 16"><polyline points="11 10 8 5 5 10"/></svg>
+    </button>
+    <button id="findNext" class="find-nav" title="Siguiente (Enter)" tabindex="-1">
+      <svg width="12" height="12" viewBox="0 0 16 16"><polyline points="5 6 8 11 11 6"/></svg>
+    </button>
+    <button id="findClose" class="find-nav" title="Cerrar (Esc)" tabindex="-1">
+      <svg width="12" height="12" viewBox="0 0 16 16"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>
+    </button>
+  </div>
+
+  <!-- cuerpo: indice + lector -->
+  <div id="app">
+    <aside id="toc">
+      <div class="toc-head">Índice</div>
+      <nav id="tocInner"></nav>
+    </aside>
+
+    <!-- separador arrastrable: ancho del índice (doble clic = restablecer) -->
+    <div id="tocResizer" title="Arrastrá para el ancho del índice · doble clic restablece"></div>
+
+    <main id="reader">
+      <article id="content"></article>
+
+      <!-- estado vacio -->
+      <div id="empty">
+        <div class="empty-mark" aria-hidden="true">
+          <svg width="92" height="92" viewBox="0 0 100 100">
+            <path class="e-page" d="M27 11 H61 L81 31 V89 H27 Z"/>
+            <path class="e-fold" d="M61 11 V31 H81 Z"/>
+            <line class="e-ln" x1="37" y1="46" x2="71" y2="46"/>
+            <line class="e-ln" x1="37" y1="58" x2="71" y2="58"/>
+            <line class="e-ln" x1="37" y1="70" x2="58" y2="70"/>
+          </svg>
+        </div>
+        <div class="empty-title">Arrastrá un documento</div>
+        <div class="empty-sub">Markdown · GFM · matemática · diagramas</div>
+        <div class="empty-row">
+          <button id="emptyOpen" class="open-btn">Abrir<span class="kbd">Ctrl O</span></button>
+        </div>
+        <div class="empty-hints">
+          <span><b>T</b> índice</span>
+          <span><b>Ctrl F</b> buscar</span>
+          <span><b>Ctrl ±</b> tamaño</span>
+          <span><b>F</b> pantalla completa</span>
+        </div>
+      </div>
+
+      <div id="toast"></div>
+    </main>
+  </div>
+
+<!-- KaTeX (265KB) y mermaid (3.2MB) se cargan BAJO DEMANDA desde app.js (sólo si el documento
+     los usa): así el arranque no paga su parseo. DOMPurify sí va eager (se usa en cada render). -->
+<script src="/vendor/dompurify/purify.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
