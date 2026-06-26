@@ -11,6 +11,9 @@ Todo el render vive en Go — sin Electron, sin navegador, sin CDN. Un solo `.ex
 ![WebView2](https://img.shields.io/badge/WebView2-frameless-7AA2F7)
 ![License](https://img.shields.io/badge/License-MIT-9ECE6A)
 
+[![Descargar](https://img.shields.io/badge/Descargar-Setup_%2B_Portable-7AA2F7?style=for-the-badge&logo=github&logoColor=white)](https://github.com/agustinyarrus/folio/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/agustinyarrus/folio/total?style=for-the-badge&color=9ECE6A&label=descargas)](https://github.com/agustinyarrus/folio/releases)
+
 <img src="docs/screenshot.png" alt="Folio" width="820">
 
 </div>
