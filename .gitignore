@@ -11,3 +11,6 @@ testdocs/*.out.html
 # temporales
 *.log
 *.tmp
+
+# instaladores compilados (van al Release)
+dist/
