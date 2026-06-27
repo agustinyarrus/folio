@@ -73,6 +73,10 @@ cd folio
 .\install.ps1    # instala en Program Files + Menú de Inicio y lo asocia a .md (UAC)
 ```
 
+Los iconos son assets curados del repo: **`folio.ico`** (icono de la app, embebido en el `.exe` al
+compilar) y **`folio-file.ico`** (icono de los documentos `.md`, vía el ProgID `Folio.Document`). El
+script opcional `.\gen-icon.ps1` regenera el glifo original y **sobreescribe `folio.ico`**.
+
 `.\install.ps1 -Uninstall` revierte la instalación. O simplemente corré el `.exe`:
 
 ```powershell

@@ -1,6 +1,10 @@
-# gen-icon.ps1 — genera folio.ico (glifo de pagina doblada sobre squircle azul-noche).
+# gen-icon.ps1 — genera el glifo de pagina doblada (icono ORIGINAL de Folio).
 # PowerShell 5.1 / System.Drawing. Produce un .ico multi-tamano con frames PNG (Vista+).
 #   .\gen-icon.ps1
+#
+# OJO: el repo ya trae iconos curados -> folio.ico (icono de la app) y folio-file.ico (icono de
+#      los archivos .md asociados). Este script SOBREESCRIBE folio.ico con el diseño generado;
+#      corrélo solo si querés volver al icono original.
 #
 # Nota PS: el operador coma liga MAS fuerte que '*', asi que toda expresion 'n*$k' dentro de una
 # lista de argumentos separada por comas va entre parentesis (si no, multiplica arrays y revienta).

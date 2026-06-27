@@ -4,7 +4,7 @@
 #define AppExe     "folio.exe"
 #define AppPub     "Agustin Yarrus"
 #define AppUrl     "https://github.com/agustinyarrus/folio"
-#define Exts       ".md;.markdown;.mdown;.mkd;.mkdn;.mdwn;.mdtxt;.mdtext;.text"
+#define Exts       ".md;.markdown;.mdown;.mkd;.mkdn;.mdwn;.mdtxt;.mdtext;.mdx;.rmd;.qmd"
 
 [Setup]
 AppId={{5C1A8E92-7B4F-4A3D-8C26-9D0E3F1B7A62}
@@ -40,10 +40,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "openwith";    Description: "Registrar {#AppName} en el menu ""Abrir con"" para Markdown"; GroupDescription: "Integracion con Windows:"
 
 [Files]
-Source: "{#AppExe}";  DestDir: "{app}"; Flags: ignoreversion
-Source: "folio.ico";  DestDir: "{app}"; Flags: ignoreversion
-Source: "README.md";  DestDir: "{app}"; Flags: ignoreversion isreadme
-Source: "LICENSE";    DestDir: "{app}"; Flags: ignoreversion
+Source: "{#AppExe}";     DestDir: "{app}"; Flags: ignoreversion
+Source: "folio.ico";     DestDir: "{app}"; Flags: ignoreversion
+Source: "folio-file.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "README.md";     DestDir: "{app}"; Flags: ignoreversion isreadme
+Source: "LICENSE";       DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}";              Filename: "{app}\{#AppExe}"
@@ -51,25 +52,54 @@ Name: "{group}\Desinstalar {#AppName}";  Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}";        Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Registry]
+; La aplicacion en si: icono del exe (documento.ico, indice 0) -> como se ve Folio en "Abrir con"
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"; Flags: uninsdeletekey; Tasks: openwith
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\DefaultIcon"; ValueType: string; ValueData: "{app}\{#AppExe},0"; Tasks: openwith
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command"; ValueType: string; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: openwith
+; ProgID propio: portador del icono de los ARCHIVOS .md asociados (folio-file.ico) y handler al abrir.
+; Los .md toman este icono cuando el usuario elige Folio como visor predeterminado.
+Root: HKA; Subkey: "Software\Classes\Folio.Document"; ValueType: string; ValueData: "Documento Markdown"; Flags: uninsdeletekey; Tasks: openwith
+Root: HKA; Subkey: "Software\Classes\Folio.Document"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "Documento Markdown"; Tasks: openwith
+Root: HKA; Subkey: "Software\Classes\Folio.Document\DefaultIcon"; ValueType: string; ValueData: "{app}\folio-file.ico"; Tasks: openwith
+Root: HKA; Subkey: "Software\Classes\Folio.Document\shell\open\command"; ValueType: string; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: openwith
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Abrir {#AppName} ahora"; Flags: nowait postinstall skipifsilent
 
 [Code]
 procedure AddSupportedTypes(exeName, csv: String);
-var rk: Integer; key, ext: String; p: Integer;
+var rk: Integer; stKey, owpKey, ext: String; p: Integer;
 begin
   if IsAdminInstallMode then rk := HKLM else rk := HKCU;
-  key := 'Software\Classes\Applications\' + exeName + '\SupportedTypes';
+  stKey := 'Software\Classes\Applications\' + exeName + '\SupportedTypes';
   csv := csv + ';';
   repeat
     p := Pos(';', csv);
     ext := Trim(Copy(csv, 1, p-1));
     Delete(csv, 1, p);
-    if ext <> '' then RegWriteStringValue(rk, key, ext, '');
+    if ext <> '' then begin
+      RegWriteStringValue(rk, stKey, ext, '');
+      // ofrecer el ProgID Folio.Document como "Abrir con" para esta extension (no pisa el default);
+      // al elegir Folio como predeterminado, el .md muestra folio-file.ico
+      owpKey := 'Software\Classes\' + ext + '\OpenWithProgids';
+      RegWriteStringValue(rk, owpKey, 'Folio.Document', '');
+    end;
+  until Length(csv) = 0;
+end;
+
+procedure DelSupportedTypes(csv: String);
+var rk: Integer; owpKey, ext: String; p: Integer;
+begin
+  if IsAdminInstallMode then rk := HKLM else rk := HKCU;
+  csv := csv + ';';
+  repeat
+    p := Pos(';', csv);
+    ext := Trim(Copy(csv, 1, p-1));
+    Delete(csv, 1, p);
+    if ext <> '' then begin
+      owpKey := 'Software\Classes\' + ext + '\OpenWithProgids';
+      RegDeleteValue(rk, owpKey, 'Folio.Document');
+    end;
   until Length(csv) = 0;
 end;
 
@@ -77,4 +107,10 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if (CurStep = ssPostInstall) and WizardIsTaskSelected('openwith') then
     AddSupportedTypes('{#AppExe}', '{#Exts}');
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+    DelSupportedTypes('{#Exts}');
 end;
