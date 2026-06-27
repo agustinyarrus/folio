@@ -26,7 +26,8 @@ if (-not $isAdmin) {
 # ---- constantes ----
 $installDir = Join-Path $env:ProgramFiles 'Folio'
 $exe        = Join-Path $installDir 'folio.exe'
-$ico        = Join-Path $installDir 'folio.ico'
+$ico        = Join-Path $installDir 'folio.ico'       # icono de la app (documento.ico)
+$fileIco    = Join-Path $installDir 'folio-file.ico'  # icono de los archivos .md (copia-md.ico)
 $progId     = 'Folio.Document'
 $exts       = '.md', '.markdown', '.mdown', '.mkd', '.mkdn', '.mdwn', '.mdtxt', '.mdtext', '.mdx', '.rmd', '.qmd'
 $cls        = 'HKLM:\Software\Classes'
@@ -60,13 +61,16 @@ Get-Process folio -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $ex
 New-Item -ItemType Directory -Force $installDir | Out-Null
 Copy-Item (Join-Path $here 'folio.exe') $exe -Force
 if (Test-Path (Join-Path $here 'folio.ico')) { Copy-Item (Join-Path $here 'folio.ico') $ico -Force }
+if (Test-Path (Join-Path $here 'folio-file.ico')) { Copy-Item (Join-Path $here 'folio-file.ico') $fileIco -Force }
 
 # 2) ProgId machine-wide
 New-Item -Path "$cls\$progId\shell\open\command" -Force | Out-Null
 Set-ItemProperty "$cls\$progId" '(default)' 'Documento Markdown'
 Set-ItemProperty "$cls\$progId" 'FriendlyTypeName' 'Documento Markdown'
 New-Item -Path "$cls\$progId\DefaultIcon" -Force | Out-Null
-Set-ItemProperty "$cls\$progId\DefaultIcon" '(default)' "$ico,0"
+# icono de los ARCHIVOS .md = folio-file.ico (copia-md.ico); fallback al de la app si faltara
+$docIcon = if (Test-Path $fileIco) { "$fileIco,0" } else { "$ico,0" }
+Set-ItemProperty "$cls\$progId\DefaultIcon" '(default)' $docIcon
 # OJO: NO re-crear "shell\open" con -Force acá: en el registro -Force borra la clave existente
 # y se llevaría puesto el subkey "command" recién creado arriba. Solo seteamos su propiedad.
 Set-ItemProperty "$cls\$progId\shell\open" 'FriendlyAppName' 'Folio'
@@ -83,12 +87,12 @@ Set-ItemProperty 'HKLM:\Software\Folio\Capabilities' 'ApplicationName' 'Folio'
 Set-ItemProperty 'HKLM:\Software\Folio\Capabilities' 'ApplicationDescription' 'Lector de Markdown ultraminimalista'
 if (Test-Path $ico) { Set-ItemProperty 'HKLM:\Software\Folio\Capabilities' 'ApplicationIcon' "$ico,0" }
 foreach ($e in $exts) { Set-ItemProperty "$cap\FileAssociations" $e $progId }
-New-Item 'HKLM:\Software\RegisteredApplications' -Force | Out-Null
+if (-not (Test-Path 'HKLM:\Software\RegisteredApplications')) { New-Item 'HKLM:\Software\RegisteredApplications' -Force | Out-Null }
 Set-ItemProperty 'HKLM:\Software\RegisteredApplications' 'Folio' 'Software\Folio\Capabilities'
 
 # 4) OpenWithProgids (aparece en "Abrir con") + default legacy si la ext no tiene
 foreach ($e in $exts) {
-  New-Item -Path "$cls\$e\OpenWithProgids" -Force | Out-Null
+  if (-not (Test-Path "$cls\$e\OpenWithProgids")) { New-Item -Path "$cls\$e\OpenWithProgids" -Force | Out-Null }
   New-ItemProperty "$cls\$e\OpenWithProgids" -Name $progId -Value ([byte[]]@()) -PropertyType None -Force | Out-Null
   $d = (Get-ItemProperty "$cls\$e" -Name '(default)' -ErrorAction SilentlyContinue).'(default)'
   if ([string]::IsNullOrEmpty($d)) { Set-ItemProperty "$cls\$e" '(default)' $progId }
