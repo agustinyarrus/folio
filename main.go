@@ -60,6 +60,7 @@ const (
 	smYVIRTUALSCREEN  = 77
 	smCXVIRTUALSCREEN = 78
 	smCYVIRTUALSCREEN = 79
+	smCMONITORS       = 80
 	htCAPTION         = 2
 	htLEFT            = 10
 	htRIGHT           = 11
@@ -79,6 +80,7 @@ const (
 	smCXFRAME         = 32
 	smCYFRAME         = 33
 	smCXPADDEDBORDER  = 92
+	spiGETWORKAREA    = 0x0030
 	swpFRAMECHANGED   = 0x0020
 	swpNOMOVE         = 0x0002
 	swpNOSIZE         = 0x0001
@@ -106,6 +108,7 @@ var (
 	pPostMessageW             = user32.NewProc("PostMessageW")
 	pReleaseCapture           = user32.NewProc("ReleaseCapture")
 	pGetSystemMetrics         = user32.NewProc("GetSystemMetrics")
+	pSystemParametersInfoW    = user32.NewProc("SystemParametersInfoW")
 	pGetWindowPlacement       = user32.NewProc("GetWindowPlacement")
 	pSetForegroundWindow      = user32.NewProc("SetForegroundWindow")
 	pGetClientRect            = user32.NewProc("GetClientRect")
@@ -170,6 +173,32 @@ type windowPlacement struct {
 func sysMetric(i int) int32 {
 	r, _, _ := pGetSystemMetrics.Call(uintptr(i))
 	return int32(r)
+}
+
+// workArea devuelve el área de trabajo del monitor primario en px físicos (bajo Per-Monitor-DPI-v2),
+// excluyendo la barra de tareas. Fallback a la pantalla completa si SPI_GETWORKAREA no responde.
+func workArea() rect {
+	var rc rect
+	r, _, _ := pSystemParametersInfoW.Call(uintptr(spiGETWORKAREA), 0, uintptr(unsafe.Pointer(&rc)), 0)
+	if r == 0 || rc.right-rc.left <= 0 || rc.bottom-rc.top <= 0 {
+		return rect{0, 0, sysMetric(smCXSCREEN), sysMetric(smCYSCREEN)}
+	}
+	return rc
+}
+
+// clampWinSize recorta el tamaño (px físicos) para que nunca supere el área de trabajo del monitor
+// primario. Sin esto, una geometría guardada mayor que la pantalla (snap, arrastre del borde más
+// allá del monitor, o un cambio de resolución) reabriría la ventana con los bordes de redimensión
+// fuera de vista -> imposible de agarrar para reajustarla.
+func clampWinSize(w, h uint) (uint, uint) {
+	wa := workArea()
+	if mw := uint(wa.right - wa.left); mw > 0 && w > mw {
+		w = mw
+	}
+	if mh := uint(wa.bottom - wa.top); mh > 0 && h > mh {
+		h = mh
+	}
+	return w, h
 }
 
 type createstructW struct {
@@ -325,23 +354,33 @@ func targetWindowPos(ww, hh int32) (x, y int32, maximized bool) {
 		sw, sh := sysMetric(smCXSCREEN), sysMetric(smCYSCREEN)
 		x, y = (sw-ww)/2, (sh-hh)/2
 	}
-	vx, vy := sysMetric(smXVIRTUALSCREEN), sysMetric(smYVIRTUALSCREEN)
-	vw, vh := sysMetric(smCXVIRTUALSCREEN), sysMetric(smCYVIRTUALSCREEN)
-	if vw <= 0 || vh <= 0 { // fallback si el virtual screen no responde
-		vx, vy = 0, 0
-		vw, vh = sysMetric(smCXSCREEN), sysMetric(smCYSCREEN)
+	// Límites de clamp: con UN monitor usamos su área de trabajo (deja la ventana entera SOBRE la
+	// barra de tareas, con TODOS los bordes de redimensión alcanzables). Con varios usamos el
+	// escritorio virtual completo, para no impedir colocarla en un monitor secundario (x/y < 0 ok).
+	var bx, by, bw, bh int32
+	if sysMetric(smCMONITORS) <= 1 {
+		wa := workArea()
+		bx, by, bw, bh = wa.left, wa.top, wa.right-wa.left, wa.bottom-wa.top
+	} else {
+		bx, by = sysMetric(smXVIRTUALSCREEN), sysMetric(smYVIRTUALSCREEN)
+		bw, bh = sysMetric(smCXVIRTUALSCREEN), sysMetric(smCYVIRTUALSCREEN)
+		if bw <= 0 || bh <= 0 { // fallback si el escritorio virtual no responde
+			bx, by, bw, bh = 0, 0, sysMetric(smCXSCREEN), sysMetric(smCYSCREEN)
+		}
 	}
-	if x > vx+vw-120 {
-		x = vx + vw - 120
+	// Primero que los bordes derecho/inferior no se salgan; luego que la esquina sup-izq no quede
+	// fuera (tiene prioridad). Con el tamaño ya acotado (clampWinSize), la ventana entra entera.
+	if x+ww > bx+bw {
+		x = bx + bw - ww
 	}
-	if y > vy+vh-80 {
-		y = vy + vh - 80
+	if y+hh > by+bh {
+		y = by + bh - hh
 	}
-	if x < vx {
-		x = vx
+	if x < bx {
+		x = bx
 	}
-	if y < vy {
-		y = vy
+	if y < by {
+		y = by
 	}
 	return
 }
@@ -578,9 +617,17 @@ func main() {
 	winW, winH := uint(1180*scale), uint(840*scale)
 	centerWin := true
 	if g := gCfg.Window; g != nil && g.W > 200 && g.H > 150 {
-		winW, winH = uint(g.W), uint(g.H)
 		centerWin = false
+		if !g.Max {
+			winW, winH = uint(g.W), uint(g.H)
+		}
+		// Si se cerró maximizada dejamos el tamaño default como "restaurado" (así al des-maximizar
+		// queda una ventana usable, no el rect gigante del estado maximizado): targetWindowPos
+		// devuelve Max=true y showWin la vuelve a maximizar al revelarla.
 	}
+	// Nunca más grande que el área de trabajo: una geometría guardada mayor que la pantalla dejaría
+	// los bordes de redimensión fuera de vista y la ventana no se podría reajustar (era el bug).
+	winW, winH = clampWinSize(winW, winH)
 	// Posición definitiva ANTES de crear: cbtProc la clava en el CREATESTRUCT para que la ventana
 	// nazca ahí. (Center sigue como fallback por si el hook no llegara a correr.)
 	spawnX, spawnY, _ = targetWindowPos(int32(winW), int32(winH))
