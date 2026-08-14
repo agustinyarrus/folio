@@ -860,15 +860,16 @@ func startServer(initialPath string) string {
 			return
 		}
 		writeJSON(wr, map[string]any{
-			"ok":    true,
-			"html":  res.HTML,
-			"title": res.Title,
-			"toc":   res.Toc,
-			"words": res.Words,
-			"path":  p,
-			"dir":   filepath.Dir(p),
-			"name":  filepath.Base(p),
-			"mtime": fi.ModTime().UnixMilli(),
+			"ok":     true,
+			"html":   res.HTML,
+			"title":  res.Title,
+			"toc":    res.Toc,
+			"words":  res.Words,
+			"format": res.Format,
+			"path":   p,
+			"dir":    filepath.Dir(p),
+			"name":   filepath.Base(p),
+			"mtime":  fi.ModTime().UnixMilli(),
 		})
 	})
 
@@ -896,7 +897,8 @@ func startServer(initialPath string) string {
 		}
 		writeJSON(wr, map[string]any{
 			"ok": true, "html": res.HTML, "title": res.Title, "toc": res.Toc,
-			"words": res.Words, "path": "", "dir": "", "name": filepath.Base(name),
+			"words": res.Words, "format": res.Format, "path": "", "dir": "",
+			"name": filepath.Base(name),
 		})
 	})
 

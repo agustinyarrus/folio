@@ -29,7 +29,22 @@ $exe        = Join-Path $installDir 'folio.exe'
 $ico        = Join-Path $installDir 'folio.ico'       # icono de la app (documento.ico)
 $fileIco    = Join-Path $installDir 'folio-file.ico'  # icono de los archivos .md (copia-md.ico)
 $progId     = 'Folio.Document'
-$exts       = '.md', '.markdown', '.mdown', '.mkd', '.mkdn', '.mdwn', '.mdtxt', '.mdtext', '.mdx', '.rmd', '.qmd'
+# Markdown: Folio se queda como visor PREDETERMINADO de estas (paso 6, vía SFTA).
+$mdExts     = '.md', '.markdown', '.mdown', '.mkd', '.mkdn', '.mdwn', '.mdtxt', '.mdtext', '.mdx', '.rmd', '.qmd'
+# El resto de los formatos que Folio sabe abrir: SOLO se agregan a "Abrir con".
+# Nunca se fijan por defecto — sería una grosería robarle los .json al editor o
+# los .docx a Word.
+$extraExts  = '.json', '.jsonc', '.json5', '.jsonl', '.ndjson', '.csv', '.tsv', '.tab',
+              '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.properties', '.env',
+              '.xml', '.plist', '.rss', '.atom', '.diff', '.patch',
+              '.txt', '.log', '.nfo', '.rst', '.rest', '.adoc', '.asciidoc', '.asc',
+              '.org', '.wiki', '.mediawiki', '.html', '.htm', '.xhtml',
+              '.ipynb', '.docx', '.odt', '.epub',
+              '.go', '.py', '.js', '.ts', '.tsx', '.jsx', '.c', '.h', '.cpp', '.hpp',
+              '.cs', '.java', '.kt', '.swift', '.rs', '.rb', '.php', '.lua', '.r',
+              '.sh', '.bash', '.ps1', '.psm1', '.bat', '.cmd', '.sql', '.css', '.scss',
+              '.vue', '.svelte', '.tf', '.proto', '.graphql', '.gradle', '.dart'
+$exts       = $mdExts + $extraExts
 $cls        = 'HKLM:\Software\Classes'
 $startLnk   = Join-Path ([Environment]::GetFolderPath('CommonStartMenu')) 'Programs\Folio.lnk'
 
@@ -94,8 +109,11 @@ Set-ItemProperty 'HKLM:\Software\RegisteredApplications' 'Folio' 'Software\Folio
 foreach ($e in $exts) {
   if (-not (Test-Path "$cls\$e\OpenWithProgids")) { New-Item -Path "$cls\$e\OpenWithProgids" -Force | Out-Null }
   New-ItemProperty "$cls\$e\OpenWithProgids" -Name $progId -Value ([byte[]]@()) -PropertyType None -Force | Out-Null
-  $d = (Get-ItemProperty "$cls\$e" -Name '(default)' -ErrorAction SilentlyContinue).'(default)'
-  if ([string]::IsNullOrEmpty($d)) { Set-ItemProperty "$cls\$e" '(default)' $progId }
+  # el default legacy solo para Markdown, y solo si la extensión no tiene dueño
+  if ($mdExts -contains $e) {
+    $d = (Get-ItemProperty "$cls\$e" -Name '(default)' -ErrorAction SilentlyContinue).'(default)'
+    if ([string]::IsNullOrEmpty($d)) { Set-ItemProperty "$cls\$e" '(default)' $progId }
+  }
 }
 
 # 5) acceso directo en el Menú de Inicio (todos los usuarios)
@@ -112,7 +130,7 @@ $sfta = Join-Path $here 'SFTA.ps1'
 $okExts = @()
 if (Test-Path $sfta) {
   . $sfta
-  foreach ($e in $exts) {
+  foreach ($e in $mdExts) {   # SOLO Markdown: el resto queda en "Abrir con"
     try {
       Set-FTA -ProgId $progId -Extension $e | Out-Null
       $cur = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\$e\UserChoice" -ErrorAction SilentlyContinue).ProgId

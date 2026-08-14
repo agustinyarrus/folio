@@ -39,19 +39,8 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-// ---- extensiones de archivo reconocidas como Markdown -------------------
-var markdownExts = map[string]bool{
-	".md": true, ".markdown": true, ".mdown": true, ".mkd": true, ".mkdn": true,
-	".mdwn": true, ".mdtxt": true, ".mdtext": true, ".text": true, ".rmd": true,
-	".qmd": true, ".mdx": true, ".litcoffee": false,
-}
-
-// MarkdownGlob es el filtro para el dialogo nativo de apertura.
-const MarkdownGlob = "*.md;*.markdown;*.mdown;*.mkd;*.mkdn;*.mdwn;*.mdtxt;*.mdtext;*.text;*.rmd;*.qmd;*.mdx"
-
-func IsMarkdown(name string) bool {
-	return markdownExts[strings.ToLower(filepath.Ext(name))]
-}
+// Las extensiones y el catalogo de formatos viven en formats.go: lo que no es
+// Markdown se convierte a Markdown y sigue por esta misma cañeria.
 
 // ---- resultado de render ------------------------------------------------
 type TocItem struct {
@@ -61,10 +50,11 @@ type TocItem struct {
 }
 
 type RenderResult struct {
-	HTML  string    `json:"html"`
-	Title string    `json:"title"`
-	Toc   []TocItem `json:"toc"`
-	Words int       `json:"words"`
+	HTML   string    `json:"html"`
+	Title  string    `json:"title"`
+	Toc    []TocItem `json:"toc"`
+	Words  int       `json:"words"`
+	Format string    `json:"format"` // "Markdown", "JSON", "Word"…
 }
 
 // ---- claves de contexto -------------------------------------------------
@@ -136,8 +126,11 @@ func renderEmbed(src string) (string, bool) {
 	return buf.String(), true
 }
 
-// Render convierte el Markdown de docPath en HTML + metadatos.
+// Render convierte el documento de docPath en HTML + metadatos. Si no es Markdown,
+// primero pasa por el conversor que le corresponda (ver formats.go).
 func Render(src []byte, docPath string) (RenderResult, error) {
+	src, format := toMarkdown(src, docPath)
+
 	docDir := filepath.Dir(docPath)
 	pc := parser.NewContext()
 	pc.Set(docDirKey, docDir)
@@ -147,7 +140,7 @@ func Render(src []byte, docPath string) (RenderResult, error) {
 		return RenderResult{}, err
 	}
 
-	res := RenderResult{HTML: buf.String(), Words: countWords(src)}
+	res := RenderResult{HTML: buf.String(), Words: countWords(src), Format: format}
 	if v, ok := pc.Get(tocKey).([]TocItem); ok {
 		res.Toc = v
 	}
@@ -248,8 +241,8 @@ func nodeText(n ast.Node, source []byte) string {
 //
 //	anchor   -> #fragmento dentro del documento
 //	external -> http(s)/mailto/tel: abre en el navegador del sistema
-//	doc      -> otro archivo .md: lo abre dentro de Folio
-//	open     -> otro archivo local: lo abre con la app del sistema
+//	doc      -> otro archivo que Folio sabe mostrar: lo abre adentro
+//	open     -> cualquier otro archivo local: lo abre con la app del sistema
 func classifyLink(docDir, dest string) (kind, resolved, frag string) {
 	if dest == "" {
 		return "normal", "", ""
@@ -278,10 +271,10 @@ func classifyLink(docDir, dest string) (kind, resolved, frag string) {
 	if !filepath.IsAbs(abs) {
 		abs = filepath.Join(docDir, abs)
 	}
-	if IsMarkdown(abs) {
+	if IsSupported(abs) {
 		return "doc", abs, frag
 	}
-	return "open", abs, "" // archivo no-md: el fragmento no aplica
+	return "open", abs, "" // no lo sabemos mostrar: que lo abra el sistema
 }
 
 // resolveAsset reescribe el src de una imagen relativa hacia el endpoint /asset del server.

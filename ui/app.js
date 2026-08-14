@@ -47,11 +47,12 @@ async function openPath(path, opts = {}) {
 }
 window.__folioOpen = (p) => openPath(p);   // el host lo llama por Eval
 
-// Arrastrar-y-soltar: render de texto crudo (sin ruta -> sin assets relativos ni recarga viva).
+// Arrastrar-y-soltar: render del archivo crudo (sin ruta -> sin assets relativos ni recarga
+// viva). Se mandan los bytes tal cual, asi entran tambien los binarios (.docx, .odt, .epub).
 async function renderRawText(text, name) {
   try {
     const r = await fetch('/render-text?name=' + encodeURIComponent(name || 'documento.md'), {
-      method: 'POST', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, body: text,
+      method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: text,
     });
     const j = await r.json();
     if (!j.ok) { toast('No se pudo abrir'); return; }
@@ -71,7 +72,11 @@ function paintText(j, opts) {
   content.innerHTML = clean;
   body.classList.add('has-doc');
   body.classList.remove('no-doc', 'empty');
-  $('capName').textContent = j.title || j.name || '';
+  const cap = $('capName');
+  cap.textContent = j.title || j.name || '';
+  // al pasar el mouse por el título: archivo, formato de origen y palabras
+  cap.title = [j.name, j.format, j.words ? j.words + ' palabras' : '']
+    .filter(Boolean).join('   ·   ');
   addCopyButtons();
   addAnchors();
   collectHeadings();
@@ -522,15 +527,18 @@ window.addEventListener('keydown', (e) => {
 // =========================================================================
 // Arrastrar y soltar
 // =========================================================================
-const mdRe = /\.(md|markdown|mdown|mkd|mkdn|mdwn|mdtxt|mdtext|text|rmd|qmd|mdx)$/i;
+// Lo que Folio sabe abrir: Markdown y compañía, datos, marcado, documentos y código.
+// La lista larga vive en formats.go; acá alcanza con no dejar pasar imágenes ni binarios
+// que no vamos a poder mostrar (si igual cae algo raro, el servidor lo muestra como texto).
+const dropNo = /\.(png|jpe?g|gif|bmp|webp|avif|heic|ico|mp[34]|mkv|mov|avi|wav|flac|zip|rar|7z|exe|dll|msi|iso|pdf)$/i;
 window.addEventListener('dragover', (e) => { e.preventDefault(); body.classList.add('dragover'); });
 window.addEventListener('dragleave', (e) => { if (!e.relatedTarget) body.classList.remove('dragover'); });
 window.addEventListener('drop', async (e) => {
   e.preventDefault(); body.classList.remove('dragover');
   const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
   if (!f) return;
-  if (!mdRe.test(f.name) && !/text\/(markdown|plain)/.test(f.type)) { toast('No es un documento Markdown'); return; }
-  try { renderRawText(await f.text(), f.name); } catch (_) { toast('No se pudo leer'); }
+  if (dropNo.test(f.name)) { toast('Folio no abre ese formato'); return; }
+  try { renderRawText(await f.arrayBuffer(), f.name); } catch (_) { toast('No se pudo leer'); }
 });
 
 // =========================================================================
