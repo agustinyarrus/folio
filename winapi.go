@@ -134,6 +134,7 @@ func pickMarkdown(owner uintptr) string {
 	comCall(dlg, mSetOptions, uintptr(opts|fosForceFS))
 
 	specs := []comdlgFilterSpec{
+		{utf16Ptr("Documentos"), utf16Ptr(OpenGlob())},
 		{utf16Ptr("Markdown"), utf16Ptr(MarkdownGlob)},
 		{utf16Ptr("Todos los archivos"), utf16Ptr("*.*")},
 	}

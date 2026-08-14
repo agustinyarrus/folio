@@ -4,7 +4,8 @@
 #define AppExe     "folio.exe"
 #define AppPub     "Agustin Yarrus"
 #define AppUrl     "https://github.com/agustinyarrus/folio"
-#define Exts       ".md;.markdown;.mdown;.mkd;.mkdn;.mdwn;.mdtxt;.mdtext;.mdx;.rmd;.qmd"
+; Solo agrega Folio a "Abrir con" (nunca lo fija por defecto), asi que la lista puede ser larga.
+#define Exts       ".md;.markdown;.mdown;.mkd;.mkdn;.mdwn;.mdtxt;.mdtext;.mdx;.rmd;.qmd;.json;.jsonc;.json5;.jsonl;.ndjson;.csv;.tsv;.tab;.yaml;.yml;.toml;.ini;.cfg;.conf;.properties;.env;.xml;.plist;.rss;.atom;.diff;.patch;.txt;.log;.nfo;.rst;.rest;.adoc;.asciidoc;.asc;.org;.wiki;.mediawiki;.html;.htm;.xhtml;.ipynb;.docx;.odt;.epub;.go;.py;.js;.ts;.tsx;.jsx;.c;.h;.cpp;.hpp;.cs;.java;.kt;.swift;.rs;.rb;.php;.lua;.r;.sh;.bash;.ps1;.psm1;.bat;.cmd;.sql;.css;.scss;.vue;.svelte;.tf;.proto;.graphql;.gradle;.dart"
 
 [Setup]
 AppId={{5C1A8E92-7B4F-4A3D-8C26-9D0E3F1B7A62}
