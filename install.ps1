@@ -71,6 +71,24 @@ if ($Uninstall) {
 # ============================ INSTALAR ============================
 if (-not (Test-Path (Join-Path $here 'folio.exe'))) { throw "No existe folio.exe en $here; corré build.ps1 primero." }
 
+# El subsistema del PE tiene que ser GUI (2). Un "go build" a secas deja el exe
+# como consola (3) y entonces Folio abre una ventana negra de cmd al lado, que
+# encima solo se cierra con la app. Mejor cortar acá que instalar eso.
+function Get-PESubsystem($path) {
+  $fs = [System.IO.File]::OpenRead($path)
+  try {
+    $br = New-Object System.IO.BinaryReader($fs)
+    $fs.Position = 0x3C
+    $peOff = $br.ReadInt32()
+    $fs.Position = $peOff + 4 + 20 + 68   # firma + COFF + offset del Subsystem (PE32+)
+    return $br.ReadUInt16()
+  } finally { $fs.Close() }
+}
+$sub = Get-PESubsystem (Join-Path $here 'folio.exe')
+if ($sub -ne 2) {
+  throw "folio.exe está compilado como aplicación de consola (subsystem $sub): abriría una ventana negra al lado. Recompilá con .\build.ps1 (usa -H windowsgui)."
+}
+
 # 1) copiar a Program Files (cerrar instancia previa instalada si está corriendo)
 Get-Process folio -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $installDir | Out-Null
