@@ -36,7 +36,7 @@ $mdExts     = '.md', '.markdown', '.mdown', '.mkd', '.mkdn', '.mdwn', '.mdtxt', 
 # los .docx a Word.
 $extraExts  = '.json', '.jsonc', '.json5', '.jsonl', '.ndjson', '.csv', '.tsv', '.tab',
               '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.properties', '.env',
-              '.xml', '.plist', '.rss', '.atom', '.diff', '.patch',
+              '.xml', '.plist', '.rss', '.atom', '.diff', '.patch', '.reg',
               '.txt', '.log', '.nfo', '.rst', '.rest', '.adoc', '.asciidoc', '.asc',
               '.org', '.wiki', '.mediawiki', '.html', '.htm', '.xhtml',
               '.ipynb', '.docx', '.odt', '.epub',
