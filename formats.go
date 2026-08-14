@@ -44,6 +44,8 @@ var formats = []format{
 	{Name: "INI", Exts: []string{".ini", ".cfg", ".conf", ".properties", ".env", ".editorconfig"}, Conv: convHighlight},
 	{Name: "XML", Exts: []string{".xml", ".xsd", ".xsl", ".xslt", ".rss", ".atom", ".plist", ".resx", ".csproj", ".props"}, Conv: convXML},
 	{Name: "Diff", Exts: []string{".diff", ".patch"}, Conv: convHighlight},
+	// los .reg que exporta regedit vienen en UTF-16 LE: los endereza decodeText
+	{Name: "Registro de Windows", Exts: []string{".reg"}, Conv: convHighlight},
 	{Name: "Texto", Exts: []string{".txt", ".log", ".nfo", ".me", ".readme", ".1st"}, Conv: convText},
 
 	// --- marcado ---------------------------------------------------------
