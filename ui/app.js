@@ -417,11 +417,93 @@ window.addEventListener('pagehide', () => {
   clearTimeout(saveTimer); saveTimer = null;
   try { navigator.sendBeacon('/api/settings', JSON.stringify({ rscale, tocOpen, tocWidth })); } catch (e) { postSettings(); }
 });
+// ---- escala tipografica --------------------------------------------------------------------
+// Dos reglas, las dos sobre el TAMAÑO FINAL de render (el que queda despues de aplicar el zoom
+// de lectura), nunca sobre el rol del texto:
+//
+//  1. TAMAÑO -> cada cuerpo aterriza en un numero ENTERO de pixeles FISICOS. En un monitor al
+//     150 %, 13 px CSS son 19,5 px reales: ese medio pixel el rasterizador lo tiene que repartir
+//     y el trazo sale blando. Redondeando, el texto apoya en la grilla del panel.
+//
+//  2. PESO -> cuanto mas chica queda la letra, mas cuerpo necesita. Por debajo de ~6 pt el trazo
+//     de una Light mide menos de un pixel; como no se puede pintar medio pixel de tinta, el
+//     motor lo pinta gris sucio: no se ve delgado, se ve BORROSO. Un escalon mas de peso lo
+//     arregla sin engordar nada de lo que ya se lee bien.
+//
+// El peso solo puede SUBIR respecto del que pide el diseño: adelgazar los titulos grandes seria
+// un cambio de diseño, no un arreglo de nitidez.
+
+const PT = 0.75;            // 1 px CSS = 0,75 pt
+const PISO_PX = 5 / PT;     // piso de 5 pt: mas chico que eso no hay cara que lo salve
+const BASE_PX = 13;         // cuerpo de referencia del diseño (zoom 1)
+
+// Los unicos pesos que entregan una cara REAL de Cascadia en este motor; verificado contra el
+// render, no contra lo que declara la fuente. OJO: el 500 NO existe -> se resuelve a SemiBold.
+const PESOS = [200, 300, 350, 400, 600, 700];
+
+const escalon = (px) => { const pt = px * PT; return pt >= 10 ? 0 : pt >= 7.5 ? 1 : pt >= 6 ? 2 : 3; };
+const ESC_REF = escalon(BASE_PX);   // el escalon para el que el diseño eligio sus pesos
+
+function pesoFinal(px, diseno) {
+  const i = PESOS.indexOf(diseno);
+  return PESOS[Math.min(PESOS.length - 1, i + Math.max(0, escalon(px) - ESC_REF))];
+}
+
+// [variable, multiplo del cuerpo, peso de diseño]
+const ESCALA = [
+  ['body',    1.00, 300],
+  ['strong',  1.00, 600],
+  ['mid',     1.00, 400],
+  ['h1',      1.95, 600],
+  ['h2',      1.50, 600],
+  ['h3',      1.24, 400],
+  ['h4',      1.06, 400],
+  ['h5',      0.95, 400],
+  ['h6',      0.84, 400],
+  ['code',    0.86, 300],
+  ['codein',  0.88, 300],
+  ['table',   0.92, 400],
+  ['note',    0.88, 300],
+  ['alert',   0.94, 400],
+  ['kbd',     0.78, 300],
+  ['tiny',    0.74, 300],
+  ['callout', 0.74, 600],
+];
+
+// El indice no acompaña el zoom de lectura (es cromo), pero igual tiene que caer en pixel entero.
+const ESCALA_TOC = [['toc', 12], ['toc-s', 11.5], ['toc-xs', 11]];
+
+// Resto de medidas FIJAS del cromo (barra de titulo, buscador, estado vacio, chips). Se exponen
+// como --px-11_5 y compañia, ya redondeadas, para que toda la app apoye en la misma grilla.
+const CROMO = [10, 10.5, 11, 11.5, 12, 12.5, 13, 14];
+
 function applyScale() {
   rscale = Math.min(1.9, Math.max(0.7, rscale));
-  document.documentElement.style.setProperty('--rscale', rscale.toFixed(3));
+  const dpr = window.devicePixelRatio || 1;
+  const alPixel = (px) => Math.max(1, Math.round(Math.max(px, PISO_PX) * dpr)) / dpr;
+  const raiz = document.documentElement.style;
+
+  raiz.setProperty('--rscale', rscale.toFixed(3));
+  for (const [nombre, mult, diseno] of ESCALA) {
+    const px = alPixel(BASE_PX * rscale * mult);
+    raiz.setProperty('--fs-' + nombre, px.toFixed(4) + 'px');
+    raiz.setProperty('--w-' + nombre, String(pesoFinal(px, diseno)));
+  }
+  for (const [nombre, px] of ESCALA_TOC) raiz.setProperty('--fs-' + nombre, alPixel(px).toFixed(4) + 'px');
+  for (const px of CROMO) raiz.setProperty('--px-' + String(px).replace('.', '_'), alPixel(px).toFixed(4) + 'px');
 }
 applyScale();
+
+// El DPI puede cambiar sin que haya resize (arrastrar la ventana a un monitor con otra escala):
+// hay que volver a redondear ahi tambien, o el texto queda apoyado en la grilla del monitor viejo.
+let mqDpr = null;
+function watchDpr() {
+  if (mqDpr) mqDpr.removeEventListener('change', onDprChange);
+  mqDpr = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+  mqDpr.addEventListener('change', onDprChange);
+}
+function onDprChange() { applyScale(); watchDpr(); }
+watchDpr();
 
 // =========================================================================
 // Indice / pantalla completa
@@ -554,6 +636,7 @@ window.addEventListener('resize', () => {
   body.classList.toggle('maximized', !isFs && window.innerWidth >= screen.availWidth - 6);
   updateProgress();
   applyTocWidth(); // re-clampear el ancho del índice si la ventana se achicó
+  applyScale();    // el resize también llega al cambiar el DPI: hay que re-redondear los cuerpos
 });
 // Zoom con Ctrl+rueda -> ajusta el tamaño de lectura (persistido); preventDefault corta el zoom
 // nativo de WebView2 (que no se recuerda al cerrar).

@@ -24,6 +24,62 @@
   --tb-h: 38px;
   --toc-w: 268px;
   --rscale: 1;            /* zoom de lectura (Ctrl +/-) */
+
+  /* ------------------------------------------------------------------ *
+   * Escala tipografica del lector.                                     *
+   *                                                                    *
+   * Los valores de verdad los calcula applyScale() en app.js, que hace  *
+   * dos cosas que el CSS solo no puede: redondear cada cuerpo al pixel  *
+   * FISICO (necesita el DPI del monitor) y elegir el PESO segun el      *
+   * tamaño FINAL de render. Lo de aca abajo es el arranque y la red de  *
+   * seguridad si el JS no llega a correr: mismos tamaños, sin redondeo. *
+   * ------------------------------------------------------------------ */
+  --fs-body:    calc(13px * var(--rscale));
+  --fs-h1:      calc(25.35px * var(--rscale));
+  --fs-h2:      calc(19.50px * var(--rscale));
+  --fs-h3:      calc(16.12px * var(--rscale));
+  --fs-h4:      calc(13.78px * var(--rscale));
+  --fs-h5:      calc(12.35px * var(--rscale));
+  --fs-h6:      calc(10.92px * var(--rscale));
+  --fs-code:    calc(11.18px * var(--rscale));
+  --fs-codein:  calc(11.44px * var(--rscale));
+  --fs-table:   calc(11.96px * var(--rscale));
+  --fs-note:    calc(11.44px * var(--rscale));
+  --fs-alert:   calc(12.22px * var(--rscale));
+  --fs-kbd:     calc(10.14px * var(--rscale));
+  --fs-tiny:    calc( 9.62px * var(--rscale));
+  --fs-callout: calc( 9.62px * var(--rscale));
+
+  /* Pesos: los unicos que entregan una cara REAL de Cascadia en este motor.
+     El 500 NO existe -> el motor lo resuelve a SemiBold, asi que el "peso
+     medio" del diseño se aplastaba contra la negrita y la jerarquia de
+     encabezados quedaba plana. */
+  --w-body:    300;
+  --w-strong:  600;
+  --w-mid:     400;
+  --w-h1:      600;
+  --w-h2:      600;
+  --w-h3:      400;
+  --w-h4:      400;
+  --w-h5:      400;
+  --w-h6:      400;
+  --w-code:    300;
+  --w-codein:  300;
+  --w-table:   400;
+  --w-note:    300;
+  --w-alert:   400;
+  --w-kbd:     300;
+  --w-tiny:    350;
+  --w-callout: 700;
+
+  /* Indice: no acompaña el zoom de lectura, pero igual cae en pixel entero. */
+  --fs-toc:    12px;
+  --fs-toc-s:  11.5px;
+  --fs-toc-xs: 11px;
+
+  /* Medidas fijas del cromo, tambien redondeadas al pixel fisico por applyScale(). */
+  --px-10: 10px;  --px-10_5: 10.5px; --px-11: 11px; --px-11_5: 11.5px;
+  --px-12: 12px;  --px-12_5: 12.5px; --px-13: 13px; --px-14:   14px;
 }
 
 *{ margin:0; padding:0; box-sizing:border-box; }
@@ -33,7 +89,16 @@ html,body{
   background:var(--bg); color:var(--fg);
   font-family:"Cascadia Code","Cascadia Mono",ui-monospace,"Segoe UI",sans-serif;
   font-weight:300; font-size:13px;
-  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  /* Sin -webkit-font-smoothing:antialiased. Medido en este WebView2 no cambia un solo pixel
+     (es propiedad de macOS), pero en Blink significa "pasame a antialiasing gris": dejarla
+     puesta era una mina para el dia que Chromium la implemente en Windows, y ademas dice lo
+     contrario de lo que queremos aca, que es ClearType subpixel. Lo que SI apagaba el
+     subpixel era otra cosa: la capa de scroll sin fondo opaco (ver #reader). */
+  text-rendering:optimizeLegibility;
+  /* Que nunca fabrique una negrita ni una italica: si el peso pedido no tiene cara real, el
+     glifo sintetizado sale emborronado y a simple vista parece "otra fuente". Todos los pesos
+     que usa esta hoja tienen cara propia instalada. */
+  font-synthesis:none;
   -webkit-user-select:none; user-select:none; cursor:default;
 }
 svg{ display:block; }
@@ -51,12 +116,12 @@ svg{ display:block; }
 .mark .m-fold{ fill:none; stroke:var(--accent); stroke-width:5; stroke-linejoin:round; }
 .mark .m-ln{ stroke:var(--fg-faint); stroke-width:5; stroke-linecap:round; }
 .wordmark{
-  font-size:11px; font-weight:300; letter-spacing:3.5px; color:var(--fg-faint);
+  font-size:var(--px-11); font-weight:300; letter-spacing:3.5px; color:var(--fg-faint);
   text-transform:lowercase; text-indent:1px;
 }
 
 .tb-center{ display:flex; align-items:center; justify-content:center; gap:8px; min-width:0;
-  font-size:12px; color:var(--fg-dim); letter-spacing:.2px;
+  font-size:var(--px-12); color:var(--fg-dim); letter-spacing:.2px;
   opacity:0; transition:opacity .4s var(--ease); }
 body.has-doc .tb-center{ opacity:1; }
 .tb-center .name{ max-width:42vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -120,9 +185,9 @@ body.ready #splash{ opacity:0; visibility:hidden; pointer-events:none; }
 body.find-open #findbar{ display:flex; transform:translateY(0); opacity:1; }
 .find-ico{ stroke:var(--fg-dim); stroke-width:1.4; fill:none; stroke-linecap:round; flex:none; }
 #findInput{ width:178px; background:transparent; border:0; outline:0; color:var(--fg);
-  font-family:inherit; font-size:12.5px; font-weight:300; -webkit-user-select:text; user-select:text; }
+  font-family:inherit; font-size:var(--px-12_5); font-weight:300; -webkit-user-select:text; user-select:text; }
 #findInput::placeholder{ color:var(--fg-faint); }
-.find-count{ font-size:11px; color:var(--fg-dim); font-variant-numeric:tabular-nums; min-width:38px; text-align:right; }
+.find-count{ font-size:var(--px-11); color:var(--fg-dim); font-variant-numeric:tabular-nums; min-width:38px; text-align:right; }
 .find-nav{ width:24px; height:24px; display:grid; place-items:center; border-radius:6px;
   background:transparent; border:0; cursor:default; color:var(--fg-dim);
   transition:background .14s, color .14s; }
@@ -152,25 +217,45 @@ body.no-doc #toc{ width:0; opacity:0; pointer-events:none; }
 body.toc-resizing{ cursor:col-resize; user-select:none; -webkit-user-select:none; }
 body.toc-resizing #toc, body.toc-resizing #tocResizer{ transition:none; }
 body.no-toc #tocResizer, body.no-doc #tocResizer{ display:none; }
-.toc-head{ font-size:10px; letter-spacing:2.5px; text-transform:uppercase; color:var(--fg-faint);
-  padding:0 0 12px 24px; }
-#tocInner{ display:flex; flex-direction:column; }
-.toc-link{ display:block; padding:4px 16px 4px 24px; font-size:12px; line-height:1.45;
+.toc-head{ font-size:var(--px-10); letter-spacing:2.5px; text-transform:uppercase; color:var(--fg-faint);
+  padding:0 0 9px 24px; }
+/* El interior conserva SIEMPRE el ancho final del panel. Cuando #toc anima su ancho (al abrir
+   un documento, al plegar el indice con T) el contenido no se re-acomoda: simplemente queda
+   recortado por el overflow-x:hidden de #toc. Sin esto, cada apertura mostraba medio segundo de
+   texto reflowando letra por letra, porque ahora los titulos envuelven en vez de cortarse. */
+#tocInner{ display:flex; flex-direction:column; width:calc(var(--toc-w) - 6px); }
+
+/* El indice muestra el titulo ENTERO: antes lo cortaba con puntos suspensivos y de
+   "Configuracion del escalon de peso segun el tamaño final" se leia "Configuracion del
+   escalon de peso ...". Ahora baja de renglon con SANGRIA FRANCESA: la continuacion queda
+   metida bajo la primera linea, asi se sigue viendo de un golpe donde arranca cada entrada
+   y en que nivel esta. El interletrado va apretado y el interlineado casi al ras: el indice
+   es una lista densa para barrer con la vista, no un parrafo para leer. */
+.toc-link{ display:block; --ind:24px;
+  padding:2px 14px 2px calc(var(--ind) + .9em); text-indent:-.9em;
+  font-size:var(--fs-toc); line-height:1.15; letter-spacing:-.3px;
   color:var(--fg-dim); border-left:2px solid transparent; cursor:default; text-decoration:none;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  white-space:normal; overflow-wrap:anywhere; hyphens:none;
   transition:color .14s, border-color .14s, background .14s; }
 .toc-link:hover{ color:var(--fg); background:rgba(255,255,255,.025); }
 .toc-link.active{ color:var(--accent); border-left-color:var(--accent); }
-.toc-link.lvl-1{ padding-left:24px; }
-.toc-link.lvl-2{ padding-left:38px; }
-.toc-link.lvl-3{ padding-left:52px; font-size:11.5px; }
-.toc-link.lvl-4{ padding-left:66px; font-size:11.5px; color:var(--fg-faint); }
-.toc-link.lvl-5,.toc-link.lvl-6{ padding-left:78px; font-size:11px; color:var(--fg-faint); }
+.toc-link.lvl-1{ --ind:24px; }
+.toc-link.lvl-2{ --ind:38px; }
+.toc-link.lvl-3{ --ind:52px; font-size:var(--fs-toc-s); }
+.toc-link.lvl-4{ --ind:66px; font-size:var(--fs-toc-s); color:var(--fg-faint); }
+.toc-link.lvl-5,.toc-link.lvl-6{ --ind:78px; font-size:var(--fs-toc-xs); color:var(--fg-faint); }
 
+/* El fondo opaco NO es decorativo: es lo que enciende ClearType en todo el documento.
+   #reader es un contenedor con scroll, asi que Chromium le arma una capa compuesta propia; si
+   esa capa no es OPACA no puede saber sobre que color va a caer cada subpixel, y entonces
+   rasteriza el texto con antialiasing GRIS. A ojo el fondo se veia igual (lo pintaba el body
+   por detras), pero el texto perdia el subpixel y el trazo fino salia lavado.
+   Medido: con la capa transparente, 0 % de los pixeles del titulo tenian franja de color;
+   con el fondo opaco, 37 % en el titulo y 89 % en el cuerpo. */
 #reader{ flex:1; height:100%; overflow-y:auto; overflow-x:hidden; position:relative;
-  scroll-behavior:smooth; }
+  background:var(--bg); scroll-behavior:smooth; }
 #content{ max-width:1380px; margin:0 auto; padding:40px 60px 42vh;
-  font-size:calc(13px * var(--rscale)); line-height:1.72; color:var(--fg);
+  font-size:var(--fs-body); font-weight:var(--w-body); line-height:1.72; color:var(--fg);
   -webkit-user-select:text; user-select:text; }
 body.no-doc #content{ display:none; }
 
@@ -178,15 +263,17 @@ body.no-doc #content{ display:none; }
 #content > *:first-child{ margin-top:0 !important; }
 
 #content h1,#content h2,#content h3,#content h4,#content h5,#content h6{
-  color:var(--fg-strong); font-weight:600; line-height:1.3; letter-spacing:.1px;
+  color:var(--fg-strong); line-height:1.3; letter-spacing:.1px;
   margin:1.9em 0 .7em; scroll-margin-top:24px; position:relative; }
-#content h1{ font-size:1.95em; font-weight:600; letter-spacing:-.2px; margin-top:.2em;
+#content h1{ font-size:var(--fs-h1); font-weight:var(--w-h1); letter-spacing:-.2px; margin-top:.2em;
   padding-bottom:.34em; border-bottom:1px solid var(--line); }
-#content h2{ font-size:1.5em; padding-bottom:.28em; border-bottom:1px solid var(--line-soft); }
-#content h3{ font-size:1.24em; font-weight:500; }
-#content h4{ font-size:1.06em; font-weight:500; color:#cfd4df; }
-#content h5{ font-size:.95em; font-weight:500; color:var(--fg-dim); }
-#content h6{ font-size:.84em; font-weight:500; color:var(--fg-dim); text-transform:uppercase; letter-spacing:1.5px; }
+#content h2{ font-size:var(--fs-h2); font-weight:var(--w-h2);
+  padding-bottom:.28em; border-bottom:1px solid var(--line-soft); }
+#content h3{ font-size:var(--fs-h3); font-weight:var(--w-h3); }
+#content h4{ font-size:var(--fs-h4); font-weight:var(--w-h4); color:#cfd4df; }
+#content h5{ font-size:var(--fs-h5); font-weight:var(--w-h5); color:var(--fg-dim); }
+#content h6{ font-size:var(--fs-h6); font-weight:var(--w-h6); color:var(--fg-dim);
+  text-transform:uppercase; letter-spacing:1.5px; }
 
 /* ancla copiable al pasar el mouse */
 #content h1 .anchor,#content h2 .anchor,#content h3 .anchor,
@@ -202,11 +289,11 @@ body.no-doc #content{ display:none; }
   border-bottom:1px solid rgba(122,162,247,.28); transition:color .14s, border-color .14s; }
 #content a:hover{ color:#a9c2ff; border-bottom-color:var(--accent); }
 
-#content strong{ color:var(--fg-strong); font-weight:600; }
+#content strong{ color:var(--fg-strong); font-weight:var(--w-strong); }
 #content em{ font-style:italic; color:#d4d9e3; }
 #content del{ color:var(--fg-dim); text-decoration-color:var(--red); }
 #content mark{ background:rgba(255,158,100,.22); color:#ffd2ad; padding:0 3px; border-radius:3px; }
-#content sup,#content sub{ font-size:.72em; }
+#content sup,#content sub{ font-size:var(--fs-tiny); font-weight:var(--w-tiny); }
 
 #content ul,#content ol{ margin:0 0 1.15em; padding-left:1.5em; }
 #content li{ margin:.32em 0; }
@@ -236,7 +323,7 @@ body.no-doc #content{ display:none; }
   border:1px solid var(--line); border-left:3px solid var(--alert-c); background:var(--alert-bg); }
 #content .alert > :last-child{ margin-bottom:0; }
 #content .alert-title{ display:flex; align-items:center; gap:.5em; margin:0 0 .35em;
-  font-weight:500; font-size:.94em; letter-spacing:.2px; color:var(--alert-c); }
+  font-weight:var(--w-alert); font-size:var(--fs-alert); letter-spacing:.2px; color:var(--alert-c); }
 #content .alert-ico{ flex:none; fill:var(--alert-c); }
 #content .alert-note{      --alert-c:var(--accent); --alert-bg:rgba(122,162,247,.075); }
 #content .alert-tip{       --alert-c:var(--green);  --alert-bg:rgba(158,206,106,.075); }
@@ -249,8 +336,8 @@ body.no-doc #content{ display:none; }
   border:1px solid var(--line); border-left:3px solid var(--callout-c,var(--fg-dim));
   background:var(--callout-bg,rgba(255,255,255,.022)); }
 #content .callout > :last-child{ margin-bottom:0; }
-#content .callout-title{ margin:0 0 .4em; font-weight:600; font-size:.74em; letter-spacing:1.2px;
-  text-transform:uppercase; color:var(--callout-c,var(--fg-dim)); }
+#content .callout-title{ margin:0 0 .4em; font-weight:var(--w-callout); font-size:var(--fs-callout);
+  letter-spacing:1.2px; text-transform:uppercase; color:var(--callout-c,var(--fg-dim)); }
 #content .callout-note,#content .callout-info{      --callout-c:var(--accent); --callout-bg:rgba(122,162,247,.07); }
 #content .callout-tip,#content .callout-success{    --callout-c:var(--green);  --callout-bg:rgba(158,206,106,.07); }
 #content .callout-important{                        --callout-c:var(--purple); --callout-bg:rgba(187,154,247,.08); }
@@ -260,12 +347,12 @@ body.no-doc #content{ display:none; }
 /* marcas inline extra: ==marca== ++ins++ ^sup^ ~sub~ */
 #content mark{ background:rgba(255,158,100,.26); color:var(--fg-strong); padding:.04em .3em; border-radius:4px; }
 #content ins{ text-decoration:none; border-bottom:.12em solid rgba(158,206,106,.55); }
-#content sub,#content sup{ font-size:.74em; line-height:0; }
+#content sub,#content sup{ font-size:var(--fs-tiny); font-weight:var(--w-tiny); line-height:0; }
 #content abbr[title]{ text-decoration:underline dotted var(--fg-dim); text-underline-offset:3px; cursor:help; }
 
 /* bloque colapsable <details> */
 #content details{ margin:0 0 1.3em; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
-#content details summary{ cursor:pointer; padding:.7em 1.05em; font-weight:500; color:var(--fg-strong);
+#content details summary{ cursor:pointer; padding:.7em 1.05em; font-weight:var(--w-mid); color:var(--fg-strong);
   list-style:none; display:flex; align-items:center; gap:.55em; border-radius:10px; transition:background .14s; }
 #content details summary::-webkit-details-marker{ display:none; }
 #content details summary::before{ content:""; flex:none; width:0; height:0;
@@ -280,22 +367,28 @@ body.no-doc #content{ display:none; }
 
 /* codigo en linea */
 #content code{ font-family:"Cascadia Code","Cascadia Mono",ui-monospace,monospace;
-  font-size:.88em; background:rgba(255,255,255,.05); border:1px solid var(--line-soft);
+  font-size:var(--fs-codein); font-weight:var(--w-codein);
+  background:rgba(255,255,255,.05); border:1px solid var(--line-soft);
   color:#c5cdf0; padding:1px 5px; border-radius:5px; }
+/* Dentro de un encabezado o de una celda el codigo vuelve a ser RELATIVO, para no romper la
+   proporcion de ese contexto (los tamaños de arriba estan anclados al cuerpo del documento). */
+#content h1 code,#content h2 code,#content h3 code,#content h4 code,#content h5 code,#content h6 code,
+#content th code,#content td code{ font-size:.88em; }
 
 /* bloques de codigo */
 #content .codeblock{ position:relative; margin:0 0 1.3em; border:1px solid var(--line);
   border-radius:10px; overflow:hidden; background:var(--surface-2); }
 #content .codeblock[data-lang]::before{ content:attr(data-lang); position:absolute; top:8px; right:12px;
-  font-size:10px; letter-spacing:1px; color:var(--fg-faint); text-transform:lowercase; z-index:1;
+  font-size:var(--px-10); letter-spacing:1px; color:var(--fg-faint); text-transform:lowercase; z-index:1;
   transition:opacity .15s; }
 #content .codeblock:hover[data-lang]::before{ opacity:0; }
 #content .codeblock pre,#content .chroma{ margin:0; background:transparent !important; }
-#content .codeblock pre{ padding:15px 17px; overflow-x:auto; font-size:.86em; line-height:1.62;
+#content .codeblock pre{ padding:15px 17px; overflow-x:auto; line-height:1.62;
+  font-size:var(--fs-code); font-weight:var(--w-code);
   font-family:"Cascadia Code","Cascadia Mono",ui-monospace,monospace; }
 #content .codeblock code{ background:none; border:0; padding:0; color:inherit; font-size:1em; }
 .copy-btn{ position:absolute; top:6px; right:7px; z-index:2; display:flex; align-items:center; gap:5px;
-  padding:4px 9px; font-family:inherit; font-size:10.5px; font-weight:300; letter-spacing:.4px;
+  padding:4px 9px; font-family:inherit; font-size:var(--px-10_5); font-weight:300; letter-spacing:.4px;
   color:var(--fg-dim); background:rgba(20,24,34,.85); border:1px solid var(--line); border-radius:6px;
   cursor:default; opacity:0; transition:opacity .15s, color .14s, border-color .14s; }
 #content .codeblock:hover .copy-btn{ opacity:1; }
@@ -316,9 +409,9 @@ body.no-doc #content{ display:none; }
 
 /* tablas */
 #content table{ display:block; width:max-content; max-width:100%; overflow-x:auto;
-  border-collapse:collapse; margin:0 0 1.3em; font-size:.92em; }
+  border-collapse:collapse; margin:0 0 1.3em; font-size:var(--fs-table); }
 #content th,#content td{ padding:7px 14px; border:1px solid var(--line); text-align:left; }
-#content thead th{ background:rgba(255,255,255,.03); color:var(--fg-strong); font-weight:500;
+#content thead th{ background:rgba(255,255,255,.03); color:var(--fg-strong); font-weight:var(--w-table);
   border-bottom:1px solid var(--line); }
 #content tbody tr{ transition:background .12s; }
 #content tbody tr:hover{ background:rgba(255,255,255,.018); }
@@ -333,21 +426,21 @@ body.no-doc #content{ display:none; }
 #content img.emoji{ display:inline; margin:0; box-shadow:none; border-radius:0; width:1.1em; height:1.1em; vertical-align:-2px; }
 
 /* teclas */
-#content kbd{ font-family:inherit; font-size:.78em; color:var(--fg-strong);
+#content kbd{ font-family:inherit; font-size:var(--fs-kbd); font-weight:var(--w-kbd); color:var(--fg-strong);
   background:#161a24; border:1px solid var(--line); border-bottom-width:2px; border-radius:5px;
   padding:1px 6px; box-shadow:0 1px 0 rgba(0,0,0,.4); }
 
 /* notas al pie */
 #content .footnotes{ margin-top:2.4em; padding-top:1.2em; border-top:1px solid var(--line);
-  font-size:.88em; color:var(--fg-dim); }
+  font-size:var(--fs-note); font-weight:var(--w-note); color:var(--fg-dim); }
 #content .footnotes ol{ padding-left:1.3em; }
-#content sup[id^="fnref"] a,#content .footnote-ref{ color:var(--accent); border:0; font-weight:400;
-  padding:0 2px; }
+#content sup[id^="fnref"] a,#content .footnote-ref{ color:var(--accent); border:0;
+  font-weight:var(--w-tiny); padding:0 2px; }
 #content .footnote-backref{ border:0; }
 
 /* listas de definicion */
 #content dl{ margin:0 0 1.15em; }
-#content dt{ color:var(--fg-strong); font-weight:600; margin-top:.7em; }
+#content dt{ color:var(--fg-strong); font-weight:var(--w-strong); margin-top:.7em; }
 #content dd{ margin:.2em 0 .2em 1.4em; color:var(--fg-dim); }
 
 /* matematica */
@@ -374,23 +467,23 @@ body.has-doc #empty{ opacity:0; pointer-events:none; }
 .empty-mark .e-fold{ fill:none; stroke:var(--accent); stroke-width:3.2; stroke-linejoin:round;
   filter:drop-shadow(0 0 6px rgba(122,162,247,.4)); }
 .empty-mark .e-ln{ stroke:var(--fg-faint); stroke-width:3.2; stroke-linecap:round; }
-.empty-title{ font-size:14px; color:var(--fg-dim); letter-spacing:.3px; margin-bottom:7px; }
-.empty-sub{ font-size:11.5px; color:var(--fg-faint); letter-spacing:.4px; margin-bottom:26px; }
+.empty-title{ font-size:var(--px-14); color:var(--fg-dim); letter-spacing:.3px; margin-bottom:7px; }
+.empty-sub{ font-size:var(--px-11_5); color:var(--fg-faint); letter-spacing:.4px; margin-bottom:26px; }
 .empty-row{ margin-bottom:30px; }
 .open-btn{ display:inline-flex; align-items:center; gap:10px; padding:8px 14px 8px 16px; border-radius:9px;
   background:var(--surface); border:1px solid var(--line); color:var(--fg);
-  font-family:inherit; font-size:12.5px; font-weight:300; letter-spacing:.4px; cursor:default;
+  font-family:inherit; font-size:var(--px-12_5); font-weight:300; letter-spacing:.4px; cursor:default;
   transition:border-color .18s, background .18s, transform .12s; }
 .open-btn:hover{ border-color:rgba(122,162,247,.4); background:#0f131b; }
 .open-btn:active{ transform:translateY(1px); }
-.kbd{ font-size:10px; color:var(--fg-dim); letter-spacing:1px; padding:2px 6px; border-radius:5px;
+.kbd{ font-size:var(--px-10); color:var(--fg-dim); letter-spacing:1px; padding:2px 6px; border-radius:5px;
   background:rgba(255,255,255,.04); border:1px solid var(--line); }
-.empty-hints{ display:flex; gap:18px; font-size:11px; color:var(--fg-faint); letter-spacing:.3px; flex-wrap:wrap; justify-content:center; max-width:80vw; }
+.empty-hints{ display:flex; gap:18px; font-size:var(--px-11); color:var(--fg-faint); letter-spacing:.3px; flex-wrap:wrap; justify-content:center; max-width:80vw; }
 .empty-hints b{ color:var(--fg-dim); font-weight:400; }
 
 /* arrastrando un archivo encima */
 body.dragover #reader::after{ content:"Soltá para abrir"; position:absolute; inset:14px;
-  display:flex; align-items:center; justify-content:center; z-index:30; font-size:13px; color:var(--accent);
+  display:flex; align-items:center; justify-content:center; z-index:30; font-size:var(--px-13); color:var(--accent);
   border:1.5px dashed rgba(122,162,247,.5); border-radius:14px; background:rgba(122,162,247,.06);
   backdrop-filter:blur(2px); }
 
@@ -398,7 +491,7 @@ body.dragover #reader::after{ content:"Soltá para abrir"; position:absolute; in
 #toast{ position:absolute; left:50%; top:14px; transform:translateX(-50%) translateY(-8px);
   padding:7px 14px; border-radius:8px; z-index:40;
   background:rgba(247,118,142,.12); border:1px solid rgba(247,118,142,.28); color:#f3a6b4;
-  font-size:11.5px; letter-spacing:.3px; opacity:0; transition:opacity .25s, transform .25s; pointer-events:none; }
+  font-size:var(--px-11_5); letter-spacing:.3px; opacity:0; transition:opacity .25s, transform .25s; pointer-events:none; }
 #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
 /* ============================ bordes de redimension ============================ */
