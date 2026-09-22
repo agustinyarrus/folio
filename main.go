@@ -1094,9 +1094,16 @@ func settle(ctx context.Context, path string, st fileStamp) fileStamp {
 	return st
 }
 
+// writeJSON sin escapar HTML: por defecto encoding/json cambia cada < > & por < y
+// compañía, y el documento renderizado es casi todo etiquetas: la respuesta pesaba mucho más.
+// Acá el JSON lo lee fetch().json(), nunca se incrusta en una página: no hay nada que proteger.
 func writeJSON(wr http.ResponseWriter, v any) {
 	wr.Header().Set("Content-Type", "application/json; charset=utf-8")
-	json.NewEncoder(wr).Encode(v)
+	enc := json.NewEncoder(wr)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		dlog("writeJSON:", err)
+	}
 }
 
 // broadcastOpen empuja una ruta a todos los clientes SSE suscritos a /openevents.
