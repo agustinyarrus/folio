@@ -21,8 +21,10 @@ import (
 	"html"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/alecthomas/chroma/v2"
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
@@ -62,6 +64,7 @@ var (
 	docDirKey  = parser.NewContextKey()
 	tocKey     = parser.NewContextKey()
 	firstH1Key = parser.NewContextKey()
+	wordsKey   = parser.NewContextKey()
 )
 
 // ---- singletons goldmark ------------------------------------------------
@@ -94,11 +97,9 @@ func buildGoldmark(forEmbed bool) goldmark.Markdown {
 		parser.WithAttribute(), // # Encabezado {#id-propio .clase}
 		parser.WithASTTransformers(
 			util.Prioritized(&alertTransformer{}, 100), // marca alertas antes del docTransformer
-			util.Prioritized(&docTransformer{}, 999),
+			// ids de encabezado: sólo en el doc externo (en el embebido chocarían con los de afuera)
+			util.Prioritized(&docTransformer{headingIDs: !forEmbed}, 999),
 		),
-	}
-	if !forEmbed {
-		parserOpts = append(parserOpts, parser.WithAutoHeadingID()) // ids sólo en el doc externo
 	}
 	return goldmark.New(
 		goldmark.WithExtensions(exts...),
@@ -140,10 +141,11 @@ func Render(src []byte, docPath string) (RenderResult, error) {
 		return RenderResult{}, err
 	}
 
-	res := RenderResult{HTML: buf.String(), Words: countWords(src), Format: format}
+	res := RenderResult{HTML: buf.String(), Format: format}
 	if v, ok := pc.Get(tocKey).([]TocItem); ok {
 		res.Toc = v
 	}
+	res.Words, _ = pc.Get(wordsKey).(int)
 	res.Title = resolveTitle(pc, docPath)
 	return res, nil
 }
@@ -163,45 +165,139 @@ func resolveTitle(pc parser.Context, docPath string) string {
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
-func countWords(src []byte) int {
-	return len(strings.Fields(string(src)))
+// countWords: palabras de LECTURA (el texto de los nodos, no la sintaxis ni el codigo).
+// Antes se contaba el fuente crudo: cada "#", "|" y "---" de una tabla sumaba una palabra.
+func countWords(s []byte) int {
+	n, inWord := 0, false
+	for _, r := range string(s) {
+		if unicode.IsSpace(r) {
+			inWord = false
+		} else if !inWord {
+			inWord = true
+			n++
+		}
+	}
+	return n
+}
+
+// githubSlug reproduce el slug de los encabezados de GitHub (github-slugger): minusculas, se
+// conservan letras, numeros y marcas de cualquier idioma, '-' y '_'; los espacios pasan a '-' y
+// el resto de la puntuacion se va. El generador por defecto de goldmark descartaba todo lo que
+// no fuera ASCII ("## Configuración del índice" -> #configuracin-del-ndice) y trabajaba sobre
+// la linea CRUDA (la URL de un enlace del titulo entraba al id). Asi, un enlace escrito para
+// GitHub (#configuración-del-índice) funciona igual en Folio.
+func githubSlug(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsMark(r) || r == '_' || r == '-':
+			b.WriteRune(r)
+		case r == ' ':
+			b.WriteByte('-')
+		}
+	}
+	return b.String()
+}
+
+// slugger reparte ids unicos: el segundo "Tablas" es tablas-1, el tercero tablas-2 (como GitHub).
+type slugger struct{ used map[string]bool }
+
+func (s *slugger) unique(base string) string {
+	if base == "" {
+		base = "seccion"
+	}
+	id := base
+	for i := 1; s.used[id]; i++ {
+		id = base + "-" + strconv.Itoa(i)
+	}
+	s.used[id] = true
+	return id
+}
+
+func headingID(h *ast.Heading) string {
+	if v, ok := h.AttributeString("id"); ok {
+		switch t := v.(type) {
+		case []byte:
+			return string(t)
+		case string:
+			return t
+		}
+	}
+	return ""
 }
 
 // =========================================================================
-// docTransformer: corre sobre el AST ya parseado. Arma el TOC, capta el primer
-// H1 y reescribe destinos de imagenes/enlaces relativos a la carpeta del doc.
+// docTransformer: corre sobre el AST ya parseado. Pone los ids de los encabezados,
+// arma el TOC, capta el primer H1, cuenta las palabras y reescribe destinos de
+// imagenes/enlaces relativos a la carpeta del doc.
 // =========================================================================
-type docTransformer struct{}
+type docTransformer struct {
+	headingIDs bool // generar ids de encabezado (el doc principal si; un ```markdown embebido no)
+}
 
 func (t *docTransformer) Transform(doc *ast.Document, reader text.Reader, pc parser.Context) {
 	source := reader.Source()
 	docDir, _ := pc.Get(docDirKey).(string)
 	var toc []TocItem
 	firstH1 := ""
+	words := 0
+	vault := newVaultResolver(docDir) // destinos de [[wikilinks]]: resolucion estilo Obsidian
+
+	// 1ª pasada: los ids explicitos ({#id}) se reservan antes de generar los automaticos,
+	// asi uno generado nunca pisa a uno que el autor escribio mas abajo.
+	slugs := &slugger{used: map[string]bool{}}
+	if t.headingIDs {
+		_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+			if h, ok := n.(*ast.Heading); ok && entering {
+				if id := headingID(h); id != "" {
+					slugs.used[id] = true
+				}
+			}
+			return ast.WalkContinue, nil
+		})
+	}
 
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
 		switch node := n.(type) {
+		case *ast.Text:
+			words += countWords(node.Segment.Value(source))
+		case *ast.String:
+			words += countWords(node.Value)
 		case *ast.Heading:
 			txt := nodeText(node, source)
-			id := ""
-			if v, ok := node.AttributeString("id"); ok {
-				if b, ok := v.([]byte); ok {
-					id = string(b)
-				} else if s, ok := v.(string); ok {
-					id = s
-				}
+			id := headingID(node)
+			if id == "" && t.headingIDs {
+				id = slugs.unique(githubSlug(txt))
+				node.SetAttributeString("id", []byte(id))
 			}
 			toc = append(toc, TocItem{Level: node.Level, Text: txt, ID: id})
 			if firstH1 == "" && node.Level == 1 {
 				firstH1 = txt
 			}
 		case *ast.Image:
-			node.Destination = []byte(resolveAsset(docDir, string(node.Destination)))
+			dest := string(node.Destination)
+			if attrString(node, wikiAttr) != "" {
+				if p := vault.find(dest); p != "" {
+					dest = p
+				}
+			}
+			node.Destination = []byte(resolveAsset(docDir, dest))
 		case *ast.Link:
-			kind, resolved, frag := classifyLink(docDir, string(node.Destination))
+			dest := string(node.Destination)
+			if attrString(node, wikiAttr) != "" {
+				if file, frag, _ := strings.Cut(dest, "#"); file != "" {
+					if p := vault.find(file); p != "" {
+						dest = p
+						if frag != "" {
+							dest += "#" + frag
+						}
+					}
+				}
+			}
+			kind, resolved, frag := classifyLink(docDir, dest)
 			node.SetAttributeString("data-kind", []byte(kind))
 			if resolved != "" {
 				node.SetAttributeString("data-path", []byte(resolved))
@@ -215,6 +311,7 @@ func (t *docTransformer) Transform(doc *ast.Document, reader text.Reader, pc par
 
 	pc.Set(tocKey, toc)
 	pc.Set(firstH1Key, firstH1)
+	pc.Set(wordsKey, words)
 }
 
 // nodeText extrae el texto plano de un nodo (para titulos del TOC).

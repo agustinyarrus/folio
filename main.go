@@ -13,6 +13,7 @@ package main
 // WM_NCLBUTTONDOWN (mantiene Aero Snap).
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -847,7 +848,7 @@ func startServer(initialPath string) string {
 			writeJSON(wr, map[string]any{"ok": false, "error": "no se pudo abrir"})
 			return
 		}
-		src, err := os.ReadFile(p)
+		src, err := readDocument(p)
 		if err != nil {
 			wr.WriteHeader(http.StatusInternalServerError)
 			writeJSON(wr, map[string]any{"ok": false, "error": err.Error()})
@@ -947,11 +948,8 @@ func startServer(initialPath string) string {
 		fmt.Fprint(wr, ": ok\n\n")
 		flusher.Flush()
 
-		last := time.Time{}
-		if fi, err := os.Stat(path); err == nil {
-			last = fi.ModTime()
-		}
-		ticker := time.NewTicker(400 * time.Millisecond)
+		last, _ := stampOf(path)
+		ticker := time.NewTicker(watchInterval)
 		defer ticker.Stop()
 		ctx := r.Context()
 		for {
@@ -959,15 +957,13 @@ func startServer(initialPath string) string {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				fi, err := os.Stat(path)
-				if err != nil {
+				cur, ok := stampOf(path)
+				if !ok || cur.same(last) {
 					continue
 				}
-				if fi.ModTime().After(last) {
-					last = fi.ModTime()
-					fmt.Fprintf(wr, "data: reload\n\n")
-					flusher.Flush()
-				}
+				last = settle(ctx, path, cur)
+				fmt.Fprintf(wr, "data: reload\n\n")
+				flusher.Flush()
 			}
 		}
 	})
@@ -1018,16 +1014,84 @@ func startServer(initialPath string) string {
 		wr.WriteHeader(http.StatusNoContent)
 	})
 
-	var handler http.Handler = mux
+	var handler http.Handler = onlyLocalHost(ln.Addr().String(), mux)
 	if debugLog {
+		guarded := handler
 		handler = http.HandlerFunc(func(wr http.ResponseWriter, r *http.Request) {
 			dlog("HTTP", r.Method, r.URL.Path)
-			mux.ServeHTTP(wr, r)
+			guarded.ServeHTTP(wr, r)
 		})
 	}
 	srv := &http.Server{Handler: handler}
 	go srv.Serve(ln)
 	return ln.Addr().String()
+}
+
+// onlyLocalHost deja pasar solo los pedidos dirigidos a NUESTRA direccion. El servidor escucha
+// en 127.0.0.1, pero una pagina cualquiera abierta en el navegador podria apuntarle con DNS
+// rebinding (un dominio suyo que pasa a resolver a 127.0.0.1) y, como para el navegador seria
+// el mismo origen, leer via /render o /asset cualquier archivo del disco. Ese pedido llega con
+// el Host del atacante: aca muere. (La ventana de Folio y el handoff usan 127.0.0.1:puerto.)
+func onlyLocalHost(addr string, next http.Handler) http.Handler {
+	_, port, _ := net.SplitHostPort(addr)
+	allowed := map[string]bool{
+		"127.0.0.1:" + port: true,
+		"localhost:" + port: true,
+	}
+	return http.HandlerFunc(func(wr http.ResponseWriter, r *http.Request) {
+		if !allowed[strings.ToLower(r.Host)] {
+			http.Error(wr, "host no permitido", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(wr, r)
+	})
+}
+
+// ---- recarga en vivo -------------------------------------------------------
+
+const (
+	watchInterval = 400 * time.Millisecond // cada cuanto se mira el archivo
+	settleStep    = 60 * time.Millisecond  // paso de la espera a que termine un guardado
+	settleRounds  = 8                      // ~0,5 s como mucho
+)
+
+// fileStamp identifica una version del archivo en disco. Mirar solo si la fecha AUMENTO
+// no alcanza: restaurar una copia (o un checkout que conserva fechas) la hace retroceder, y
+// un guardado dentro del mismo tick de reloj puede cambiar solo el tamaño.
+type fileStamp struct {
+	mod  time.Time
+	size int64
+}
+
+func (a fileStamp) same(b fileStamp) bool { return a.size == b.size && a.mod.Equal(b.mod) }
+
+func stampOf(path string) (fileStamp, bool) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return fileStamp{}, false
+	}
+	return fileStamp{fi.ModTime(), fi.Size()}, true
+}
+
+// settle espera a que el archivo deje de cambiar. Los editores que guardan en dos pasos
+// (truncar y escribir, o escribir un temporal y renombrarlo) dejan un instante el archivo
+// vacio o a medias: recargar justo ahi pintaba el documento en blanco por un parpadeo.
+func settle(ctx context.Context, path string, st fileStamp) fileStamp {
+	for i := 0; i < settleRounds; i++ {
+		select {
+		case <-ctx.Done():
+			return st
+		case <-time.After(settleStep):
+		}
+		cur, ok := stampOf(path)
+		if ok && cur.same(st) {
+			return cur
+		}
+		if ok {
+			st = cur
+		}
+	}
+	return st
 }
 
 func writeJSON(wr http.ResponseWriter, v any) {

@@ -11,7 +11,10 @@ package main
 // chroma, que ya venia vendorizado: ni una dependencia nueva.
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -220,9 +223,31 @@ func AllExts() []string {
 
 // Limites de cordura: un .log de 300 MB no tiene por que voltear el visor.
 const (
-	maxHighlightBytes = 4 << 20  // arriba de esto no se resalta (chroma se pone lento)
-	maxSourceBytes    = 48 << 20 // arriba de esto se trunca
+	maxHighlightBytes = 4 << 20   // arriba de esto no se resalta (chroma se pone lento)
+	maxSourceBytes    = 48 << 20  // arriba de esto se trunca
+	maxContainerBytes = 256 << 20 // docx/odt/epub: hay que leerlos enteros (el indice del ZIP va al final)
 )
+
+// readDocument lee un archivo para mostrarlo sin cargar nunca mas de lo que se va a usar.
+// Antes era os.ReadFile: un .log de 3 GB se subia entero a memoria para despues quedarse con
+// los primeros 48 MB. Ahora se leen maxSourceBytes+1 (el +1 le avisa a toMarkdown que sobra
+// y que tiene que decir "truncado"); los formatos ZIP, que no se pueden cortar, van enteros
+// hasta su propio tope.
+func readDocument(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	limit := int64(maxSourceBytes) + 1
+	if binaryFormats[FormatName(path)] {
+		if fi, err := f.Stat(); err == nil && fi.Size() > maxContainerBytes {
+			return nil, fmt.Errorf("el documento pesa %d MB: el tope es %d MB", fi.Size()>>20, maxContainerBytes>>20)
+		}
+		limit = maxContainerBytes
+	}
+	return io.ReadAll(io.LimitReader(f, limit))
+}
 
 // toMarkdown convierte lo que sea a Markdown. Devuelve el Markdown y el nombre del
 // formato. Si el conversor falla, cae a mostrar el archivo como texto plano: es
@@ -294,18 +319,10 @@ func utf16ToUTF8(b []byte, bigEndian bool) []byte {
 	return []byte(string(utf16.Decode(u)))
 }
 
-// looksBinary: si hay un byte cero en los primeros 8 KB, no es texto.
+// looksBinary: si hay un byte cero en los primeros 8 KB, no es texto (la heuristica de
+// git). bytes.IndexByte va vectorizado: mucho mas rapido que un for byte a byte.
 func looksBinary(src []byte) bool {
-	n := len(src)
-	if n > 8192 {
-		n = 8192
-	}
-	for i := 0; i < n; i++ {
-		if src[i] == 0 {
-			return true
-		}
-	}
-	return false
+	return bytes.IndexByte(src[:min(len(src), 8192)], 0) >= 0
 }
 
 // binaryNotice arma la vista de un archivo binario: aviso + volcado hexadecimal.
@@ -381,14 +398,15 @@ func codeBlock(code, lang string) string {
 	return fence + lang + "\n" + code + fence + "\n\n"
 }
 
+// mdEscaper se arma una sola vez: NewReplacer compila su automata en cada llamada,
+// y mdEscape corre por cada titulo, celda y mensaje de todos los conversores.
+var mdEscaper = strings.NewReplacer(
+	`\`, `\\`, "`", "\\`", `*`, `\*`, `_`, `\_`, `[`, `\[`, `]`, `\]`,
+	`<`, `\<`, `>`, `\>`, `#`, `\#`, `|`, `\|`,
+)
+
 // mdEscape protege los caracteres que Markdown se toma en serio.
-func mdEscape(s string) string {
-	r := strings.NewReplacer(
-		`\`, `\\`, "`", "\\`", `*`, `\*`, `_`, `\_`, `[`, `\[`, `]`, `\]`,
-		`<`, `\<`, `>`, `\>`, `#`, `\#`, `|`, `\|`,
-	)
-	return r.Replace(s)
-}
+func mdEscape(s string) string { return mdEscaper.Replace(s) }
 
 // cellEscape prepara un valor para una celda de tabla (una sola linea, sin pipes).
 func cellEscape(s string) string {
@@ -400,7 +418,11 @@ func cellEscape(s string) string {
 }
 
 // mdTable arma una tabla GFM. Las filas cortas se rellenan y las largas se recortan.
-func mdTable(head []string, rows [][]string) string {
+func mdTable(head []string, rows [][]string) string { return mdTableAligned(head, rows, nil) }
+
+// mdTableAligned es mdTable con alineacion por columna: 'r' derecha, 'c' centro,
+// cualquier otro valor (o align nil / mas corto) queda a la izquierda.
+func mdTableAligned(head []string, rows [][]string, align []byte) string {
 	if len(head) == 0 {
 		return ""
 	}
@@ -410,8 +432,19 @@ func mdTable(head []string, rows [][]string) string {
 		b.WriteString(" " + cellEscape(h) + " |")
 	}
 	b.WriteString("\n|")
-	for range head {
-		b.WriteString(" --- |")
+	for j := range head {
+		mode := byte(0)
+		if j < len(align) {
+			mode = align[j]
+		}
+		switch mode {
+		case 'r':
+			b.WriteString(" ---: |")
+		case 'c':
+			b.WriteString(" :---: |")
+		default:
+			b.WriteString(" --- |")
+		}
 	}
 	b.WriteString("\n")
 	for _, r := range rows {
