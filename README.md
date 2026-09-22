@@ -38,9 +38,9 @@ así que hereda el índice, la búsqueda, el resaltado y la tipografía sin ning
 | Grupo | Formatos | Qué hace |
 |---|---|---|
 | **Markdown** | `md` `markdown` `mdown` `mkd` `mdx` `rmd` `qmd` … | el camino nativo (ver abajo) |
-| **Datos** | `json` `jsonc` `json5` `jsonl` `ndjson` `csv` `tsv` `yaml` `toml` `ini` `env` `xml` `plist` | el JSON se formatea; un arreglo de objetos y un CSV salen como **tabla de verdad** |
-| **Marcado** | `rst` `adoc` `asciidoc` `org` `wiki` `mediawiki` `html` `htm` `xhtml` | encabezados, listas, énfasis, código, enlaces, imágenes, tablas y admoniciones (`.. note::` → alerta) |
-| **Documentos** | `docx` `odt` `epub` `ipynb` | Word y OpenDocument con negritas, enlaces, listas y tablas; el EPUB se arma capítulo por capítulo; el notebook con sus salidas, imágenes y errores |
+| **Datos** | `json` `jsonc` `json5` `jsonl` `ndjson` `csv` `tsv` `yaml` `toml` `ini` `env` `xml` `plist` | un arreglo de objetos y un CSV salen como **tabla de verdad**: columnas en el orden del archivo, números alineados a la derecha, el separador del CSV se deduce solo (`,` `;` `\t` `\|`). Un JSON con comentarios (tsconfig, settings de VS Code, JSON5) se ve **tal cual**, comentarios incluidos; solo se reformatea el minificado |
+| **Marcado** | `rst` `adoc` `asciidoc` `org` `wiki` `mediawiki` `html` `htm` `xhtml` | encabezados, listas, énfasis, código, enlaces, imágenes, **tablas** (grid y simples de reST, `\|===` de AsciiDoc, Org, `{\|` de MediaWiki), **notas al pie** y admoniciones (`.. note::` → alerta) |
+| **Documentos** | `docx` `odt` `epub` `ipynb` | Word y OpenDocument con negritas, enlaces (también los campos HYPERLINK), listas anidadas, tablas y notas al pie; el EPUB se arma capítulo por capítulo con sus enlaces internos funcionando; el notebook con sus salidas, fórmulas, imágenes y errores |
 | **Código** | `go` `py` `js` `ts` `c` `cpp` `rs` `java` `cs` `rb` `php` `sh` `ps1` `sql` … | resaltado por lenguaje: **todo lo que chroma reconozca**, que son ~250 |
 | **Texto** | `txt` `log` `nfo` `diff` `patch` | tal cual, con formato preservado (y el `diff` coloreado) |
 
@@ -58,29 +58,30 @@ falla, se ve el contenido crudo en vez de un error.</sub>
 - **Alertas estilo GitHub**: `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]` con ícono y color.
 - **Emoji** por atajo: `:tada:` → 🎉 (unicode real, offline).
 - **Marcas inline** (Pandoc / markdown-it): `==resaltado==`, `++insertado++`, `x^2^`, `H~2~O`.
-- **Wikilinks** (Obsidian): `[[Página]]`, `[[Página|alias]]`, `[[Página#sección]]`.
+- **Wikilinks** (Obsidian): `[[Página]]`, `[[Página|alias]]`, `[[Página#sección]]` y las imágenes insertadas `![[foto.png|300]]`, que se buscan en la bóveda como lo hace Obsidian.
 - **Contenedores** (Pandoc / VuePress): `::: warning … :::`, anidables, con título propio.
 - **Abreviaturas** (Markdown Extra): `*[HTML]: HyperText Markup Language`.
 - **Markdown embebido**: un bloque ` ```markdown ` se renderiza formateado dentro de su caja.
-- **IDs de encabezado propios** `{#mi-ancla}`, footnotes, listas de definición, tipografía, frontmatter YAML.
+- **IDs de encabezado** como los de GitHub (`#configuración-del-índice`, con tildes), o propios con `{#mi-ancla}`; footnotes, listas de definición, tipografía, frontmatter YAML.
 - **Resaltado de código** por lenguaje (chroma, paleta Tokyo Night) con botón de copiar.
 - **Matemática** `$...$` / `$$...$$` (KaTeX) y **diagramas** ```mermaid```.
 
 ## 🎛️ Características
 
 - **Índice (TOC)** lateral autogenerado, de **ancho arrastrable**, con resaltado de la sección activa.
-- **Recarga en vivo**: editás el `.md` en cualquier editor y la vista se actualiza sola (SSE), conservando el scroll.
-- **Búsqueda** in-page (Ctrl F) con resaltado vía CSS Custom Highlight API.
+- **Recarga en vivo**: editás el `.md` en cualquier editor y la vista se actualiza sola (SSE) **sin moverte del párrafo que estabas leyendo**, aunque el cambio sea arriba. Espera a que el editor termine de guardar y no repinta si el contenido no cambió.
+- **Búsqueda** in-page (Ctrl F o `/`) sin distinguir tildes ni mayúsculas ("accion" encuentra "Acción"), también a través del formato ("**Folio** es"), con resaltado vía CSS Custom Highlight API.
 - **Zoom de lectura** (Ctrl ±) recordado entre sesiones.
 - **Pantalla completa**, **instancia única** (la 2ª apertura reusa la ventana viva), arrastrar-y-soltar.
 - Esquinas redondeadas y borde oscuro nativos de Windows 11.
+- **Solo local de verdad**: el servidor interno responde únicamente a su propia dirección (`127.0.0.1:puerto`), así una página web no puede usar DNS rebinding para leer archivos del disco a través de él.
 
 ## ⌨️ Atajos
 
 | Tecla                | Acción                          |
 |----------------------|---------------------------------|
 | `Ctrl O`             | Abrir documento                 |
-| `Ctrl F`             | Buscar (`Enter` / `Shift+Enter`)|
+| `Ctrl F` / `/`       | Buscar (`Enter` / `Shift+Enter`, `n` / `N`)|
 | `T`                  | Mostrar/ocultar índice          |
 | `Ctrl ±` / `Ctrl+rueda` | Tamaño de letra (se recuerda)|
 | `F` / `F11`          | Pantalla completa               |

@@ -1,6 +1,6 @@
 ; Folio — instalador (Inno Setup 6). Compilar: ISCC folio.iss  ->  dist\Folio-Setup-x.y.z.exe
 #define AppName    "Folio"
-#define AppVer     "1.0.0"
+#define AppVer     "1.1.0"
 #define AppExe     "folio.exe"
 #define AppPub     "Agustin Yarrus"
 #define AppUrl     "https://github.com/agustinyarrus/folio"
