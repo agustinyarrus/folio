@@ -19,9 +19,9 @@ if ((Test-Path folio.ico) -and -not (Test-Path rsrc.syso)) {
 }
 
 if ($Debug) {
-  go build -o folio-debug.exe .
+  go build -trimpath -o folio-debug.exe .
   Write-Host "OK -> $(Resolve-Path folio-debug.exe)   (corre con FOLIO_DEBUG=1 para logs)"
 } else {
-  go build -ldflags="-H windowsgui -s -w" -o folio.exe .
+  go build -trimpath -ldflags="-H windowsgui -s -w" -o folio.exe .
   Write-Host "OK -> $(Resolve-Path folio.exe)"
 }
