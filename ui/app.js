@@ -10,7 +10,9 @@ const body = document.body;
 const content = $('content');
 const reader = $('reader');
 const toc = $('toc');
+const tocPanel = $('tocPanel');   // la lista de títulos (desplegado la llena; plegado flota como vista previa)
 const tocInner = $('tocInner');
+const railTicks = $('railTicks'); // las marcas del índice plegado
 
 window.__log = (m) => { if (!window.__FOLIO_DEBUG__) return; try { fetch('/log?m=' + encodeURIComponent(m)); } catch (e) { /* sin host */ } };
 window.addEventListener('error', (e) => window.__log('ERR ' + e.message + ' @' + (e.filename || '') + ':' + e.lineno));
@@ -266,12 +268,14 @@ function scrollToAnchor(frag, behavior = 'smooth') {
 // DOM solo si cambio la seccion activa (O(1)); antes eran n lecturas de offsetTop + n toggles
 // por frame, que en un documento con cientos de titulos se notaba al scrollear.
 // =========================================================================
-const spy = { headings: [], tops: null, dirty: true, links: new Map(), active: null };
+// links y ticks van por id: la lista de títulos del panel y las marcas del riel son dos vistas del
+// mismo índice, y el scroll-spy enciende las dos con una sola búsqueda O(1).
+const spy = { headings: [], tops: null, dirty: true, links: new Map(), ticks: new Map(), tickList: [], active: null };
 
 function buildToc(items) {
-  tocInner.textContent = '';
-  spy.links = new Map(); spy.active = null;
-  const frag = document.createDocumentFragment();
+  tocInner.textContent = ''; railTicks.textContent = '';
+  spy.links = new Map(); spy.ticks = new Map(); spy.tickList = []; spy.active = null;
+  const frag = document.createDocumentFragment(), tfrag = document.createDocumentFragment();
   for (const it of items) {
     if (!it.id) continue;
     const a = document.createElement('a');
@@ -279,17 +283,42 @@ function buildToc(items) {
     a.textContent = it.text || '—';
     a.href = '#' + it.id;
     a.tabIndex = -1;
-    a.addEventListener('click', (e) => { e.preventDefault(); scrollToAnchor(it.id); });
+    a.addEventListener('click', (e) => { e.preventDefault(); scrollToAnchor(it.id); closePeek(); });
     frag.appendChild(a);
     spy.links.set(it.id, a);
+    // la marca del riel: mismo destino, sin texto (la vista previa ya lo muestra al pasar el mouse)
+    const t = document.createElement('i');
+    t.className = 'tick lvl-' + it.level;
+    t.setAttribute('role', 'button'); t.setAttribute('aria-label', it.text || '');
+    t.addEventListener('click', () => scrollToAnchor(it.id));
+    tfrag.appendChild(t);
+    spy.ticks.set(it.id, t); spy.tickList.push(t);
   }
   tocInner.appendChild(frag);
-  const hasToc = spy.links.size > 0;
-  $('btnOutline').classList.toggle('on', hasToc && tocOpen);
-  $('btnOutline').style.opacity = hasToc ? '' : '.35';
-  body.classList.toggle('no-toc', !tocOpen || !hasToc);
+  railTicks.appendChild(tfrag);
+  applyTocMode();
+  layoutRail();
   scrollSpy();
 }
+
+// ---- riel: cada marca en su lugar ---------------------------------------------------------
+// Las marcas se apilan de arriba a abajo con un paso fijo (RAIL.step), como una lista en
+// miniatura; si hay más títulos que alto, el paso se comprime para que entren TODOS (no se
+// recorta ninguno). Cada posición y el grosor caen en pixel FÍSICO entero: a 150 % una raya de
+// 2 px CSS son 3 px reales, nunca 2,5 emborronados. O(n) por layout; corre al armar el índice,
+// al cambiar el alto del riel (ResizeObserver) y al cambiar el DPI.
+const RAIL = { tickH: 2, step: 7, pad: 6 };
+function layoutRail() {
+  const n = spy.tickList.length;
+  if (!n) return;
+  const dpr = window.devicePixelRatio || 1;
+  const snap = (v) => Math.round(v * dpr) / dpr;
+  railTicks.style.setProperty('--tick-h', snap(Math.max(RAIL.tickH, 1 / dpr)).toFixed(4) + 'px');
+  const avail = Math.max(0, railTicks.clientHeight - 2 * RAIL.pad - RAIL.tickH);
+  const step = n > 1 ? Math.min(RAIL.step, avail / (n - 1)) : 0;
+  for (let i = 0; i < n; i++) spy.tickList[i].style.top = snap(RAIL.pad + i * step).toFixed(4) + 'px';
+}
+new ResizeObserver(layoutRail).observe(railTicks);
 
 function collectHeadings() {
   spy.headings = [...content.querySelectorAll(HEADINGS)];
@@ -326,17 +355,19 @@ function scrollSpy() {
     const i = Math.max(0, lastAtOrAbove(spy.tops, reader.scrollTop + SPY_OFFSET));
     const id = plainId(spy.headings[i].id);
     if (id === spy.active) return;
-    const prev = spy.links.get(spy.active);
+    const prev = spy.links.get(spy.active), prevTick = spy.ticks.get(spy.active);
     if (prev) prev.classList.remove('active');
+    if (prevTick) prevTick.classList.remove('active');
     spy.active = id;
-    const link = spy.links.get(id);
+    const link = spy.links.get(id), tick = spy.ticks.get(id);
     if (link) { link.classList.add('active'); keepTocVisible(link); }
+    if (tick) tick.classList.add('active');
   });
 }
 function keepTocVisible(el) {
-  const r = el.getBoundingClientRect(), t = toc.getBoundingClientRect();
-  if (r.top < t.top + 40) toc.scrollTop -= (t.top + 40 - r.top);
-  else if (r.bottom > t.bottom - 12) toc.scrollTop += (r.bottom - (t.bottom - 12));
+  const r = el.getBoundingClientRect(), t = tocPanel.getBoundingClientRect();
+  if (r.top < t.top + 40) tocPanel.scrollTop -= (t.top + 40 - r.top);
+  else if (r.bottom > t.bottom - 12) tocPanel.scrollTop += (r.bottom - (t.bottom - 12));
 }
 
 // =========================================================================
@@ -735,7 +766,7 @@ function watchDpr() {
   mqDpr = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
   mqDpr.addEventListener('change', onDprChange);
 }
-function onDprChange() { applyScale(); watchDpr(); }
+function onDprChange() { applyScale(); layoutRail(); watchDpr(); }
 watchDpr();
 
 function zoomBy(delta) {
@@ -744,15 +775,59 @@ function zoomBy(delta) {
 }
 
 // =========================================================================
-// Indice / pantalla completa
+// Indice: desplegado o plegado en el riel, más la vista previa
+//
+// Dos estados persistentes (tocOpen, guardado en config.json) y una máquina transitoria para la
+// vista previa del índice plegado:
+//
+//   closed --entra el mouse al riel--> arming --PEEK_OPEN_MS--> open
+//   open   --sale el mouse----------> closing --PEEK_CLOSE_MS--> closed
+//   closing --vuelve a entrar-------> open          (sin volver a esperar)
+//   arming  --sale antes de tiempo--> closed        (un roce no la abre)
+//
+// La demora de apertura evita que se asome al cruzar el riel de paso; la de cierre deja pasar
+// del riel al panel flotante sin que se esfume en el camino. Elegir un título la cierra: lo que
+// se quiere ver es la sección, no el índice.
 // =========================================================================
-function toggleToc() {
-  tocOpen = !tocOpen;
-  saveSettings();
-  const hasToc = spy.links.size > 0;
-  body.classList.toggle('no-toc', !tocOpen || !hasToc);
-  $('btnOutline').classList.toggle('on', tocOpen && hasToc);
+const PEEK_OPEN_MS = 140, PEEK_CLOSE_MS = 220;
+const peek = { state: 'closed', timer: 0 };
+function peekTo(state) {
+  clearTimeout(peek.timer);
+  peek.state = state;
+  body.classList.toggle('toc-peek', state === 'open' || state === 'closing');
 }
+function closePeek() { if (peek.state !== 'closed') peekTo('closed'); }
+toc.addEventListener('pointerenter', () => {
+  if (tocOpen || body.classList.contains('no-toc')) return;
+  if (peek.state === 'closing') { peekTo('open'); return; }
+  if (peek.state !== 'closed') return;
+  peekTo('arming');
+  peek.timer = setTimeout(() => peekTo('open'), PEEK_OPEN_MS);
+});
+toc.addEventListener('pointerleave', () => {
+  if (peek.state === 'arming') { peekTo('closed'); return; }
+  if (peek.state !== 'open') return;
+  peekTo('closing');
+  peek.timer = setTimeout(() => peekTo('closed'), PEEK_CLOSE_MS);
+});
+
+// applyTocMode proyecta (tocOpen, hay títulos) a las clases del body; es idempotente y se llama
+// al armar cada índice y en cada cambio de modo.
+function applyTocMode() {
+  const hasToc = spy.links.size > 0;
+  body.classList.toggle('no-toc', !hasToc);
+  body.classList.toggle('toc-rail', !tocOpen);
+  if (tocOpen || !hasToc) closePeek();
+  $('btnOutline').classList.toggle('on', hasToc && tocOpen);
+  $('btnOutline').style.opacity = hasToc ? '' : '.35';
+}
+function setTocOpen(open) {
+  if (open === tocOpen) return;
+  tocOpen = open;
+  applyTocMode();
+  saveSettings();
+}
+function toggleToc() { setTocOpen(!tocOpen); }
 let isFs = false;
 function setFullscreen(on) {
   isFs = on; body.classList.toggle('fullscreen', on);
@@ -766,6 +841,8 @@ $('btnMin').addEventListener('click', () => bridge('folioMin'));
 $('btnClose').addEventListener('click', () => bridge('folioClose'));
 $('btnMax').addEventListener('click', () => { bridge('folioMaxToggle'); body.classList.toggle('maximized'); });
 $('btnOutline').addEventListener('click', toggleToc);
+$('btnTocFold').addEventListener('click', () => setTocOpen(false));
+$('btnTocUnfold').addEventListener('click', () => setTocOpen(true));
 $('btnFind').addEventListener('click', openFind);
 $('btnOpen').addEventListener('click', () => bridge('folioPick'));
 $('emptyOpen').addEventListener('click', () => bridge('folioPick'));
@@ -835,7 +912,10 @@ window.addEventListener('keydown', (e) => {
     case 't': case 'T': e.preventDefault(); toggleToc(); break;
     case 'f': case 'F': case 'F11': e.preventDefault(); setFullscreen(!isFs); break;
     case '/': e.preventDefault(); openFind(); break;
-    case 'Escape': if (isFs) { e.preventDefault(); setFullscreen(false); } break;
+    case 'Escape':
+      if (peek.state !== 'closed') { e.preventDefault(); closePeek(); }
+      else if (isFs) { e.preventDefault(); setFullscreen(false); }
+      break;
     case 'g': case 'Home': e.preventDefault(); reader.scrollTo({ top: 0, behavior: 'smooth' }); break;
     case 'G': case 'End': e.preventDefault(); reader.scrollTo({ top: reader.scrollHeight, behavior: 'smooth' }); break;
     case ' ': case 'PageDown': e.preventDefault(); reader.scrollBy({ top: reader.clientHeight * SCROLL_PAGE * (e.shiftKey ? -1 : 1), behavior: 'smooth' }); break;

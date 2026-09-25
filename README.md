@@ -68,7 +68,7 @@ falla, se ve el contenido crudo en vez de un error.</sub>
 
 ## 🎛️ Características
 
-- **Índice (TOC)** lateral autogenerado, de **ancho arrastrable**, con resaltado de la sección activa.
+- **Índice (TOC)** lateral autogenerado, de **ancho arrastrable**, con resaltado de la sección activa. **Se pliega a un riel** de 18 px con una marca por título (el largo dice el nivel, la sección que estás leyendo va en azul): al pasar el mouse el índice se asoma flotando sobre el texto, sin moverlo, y elegir un título lo vuelve a guardar. Chevrón en el panel, `T`, o el botón de la barra; se recuerda entre sesiones.
 - **Recarga en vivo**: editás el `.md` en cualquier editor y la vista se actualiza sola (SSE) **sin moverte del párrafo que estabas leyendo**, aunque el cambio sea arriba. Espera a que el editor termine de guardar y no repinta si el contenido no cambió.
 - **Búsqueda** in-page (Ctrl F o `/`) sin distinguir tildes ni mayúsculas ("accion" encuentra "Acción"), también a través del formato ("**Folio** es"), con resaltado vía CSS Custom Highlight API.
 - **Zoom de lectura** (Ctrl ±) recordado entre sesiones.
@@ -82,7 +82,7 @@ falla, se ve el contenido crudo en vez de un error.</sub>
 |----------------------|---------------------------------|
 | `Ctrl O`             | Abrir documento                 |
 | `Ctrl F` / `/`       | Buscar (`Enter` / `Shift+Enter`, `n` / `N`)|
-| `T`                  | Mostrar/ocultar índice          |
+| `T`                  | Plegar/desplegar el índice (`Esc` cierra la vista previa) |
 | `Ctrl ±` / `Ctrl+rueda` | Tamaño de letra (se recuerda)|
 | `F` / `F11`          | Pantalla completa               |
 | `g` / `G`            | Ir arriba / abajo               |

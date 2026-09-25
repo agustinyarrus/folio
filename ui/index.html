@@ -87,9 +87,26 @@
 
   <!-- cuerpo: indice + lector -->
   <div id="app">
+    <!-- El índice tiene dos caras. Desplegado (#tocPanel) es la columna de títulos de siempre.
+         Plegado, #toc se angosta a un RIEL (#tocRail): una marca por título, la sección activa en
+         acento; al pasar el mouse el panel se asoma flotando sobre el texto (vista previa) sin
+         mover nada del lector. -->
     <aside id="toc">
-      <div class="toc-head">Índice</div>
-      <nav id="tocInner"></nav>
+      <div id="tocRail" aria-label="Índice plegado">
+        <button class="rail-btn" id="btnTocUnfold" title="Desplegar el índice (T)" tabindex="-1">
+          <svg width="12" height="12" viewBox="0 0 16 16"><line x1="3" y1="3" x2="3" y2="13"/><polyline points="7 4 11 8 7 12"/></svg>
+        </button>
+        <div id="railTicks"></div>
+      </div>
+      <div id="tocPanel">
+        <div class="toc-head">
+          <span class="toc-head-label">Índice</span>
+          <button class="toc-fold" id="btnTocFold" title="Plegar el índice (T)" tabindex="-1">
+            <svg width="12" height="12" viewBox="0 0 16 16"><line x1="3" y1="3" x2="3" y2="13"/><polyline points="12 4 8 8 12 12"/></svg>
+          </button>
+        </div>
+        <nav id="tocInner"></nav>
+      </div>
     </aside>
 
     <!-- separador arrastrable: ancho del índice (doble clic = restablecer) -->

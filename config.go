@@ -6,7 +6,8 @@ package main
 // arranque (127.0.0.1:0), y localStorage está particionado por origen (incluye el puerto), así que
 // cada apertura sería un origen nuevo y se perdería todo. Guardando acá sobrevive a los reinicios:
 //   - rscale  : tamaño de letra de lectura (Ctrl +/-)
-//   - tocOpen : índice visible o no
+//   - tocOpen : índice desplegado (true) o plegado en el riel de marcas (false)
+//   - tocWidth: ancho del índice desplegado, en px
 //   - window  : geometría de la ventana (se guarda al cerrar, en WM_CLOSE)
 
 import (

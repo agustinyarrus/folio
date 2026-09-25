@@ -23,6 +23,7 @@
   --ease: cubic-bezier(.22,.61,.36,1);
   --tb-h: 38px;
   --toc-w: 268px;
+  --rail-w: 18px;         /* el índice plegado: un riel con una marca por título */
   --rscale: 1;            /* zoom de lectura (Ctrl +/-) */
 
   /* ------------------------------------------------------------------ *
@@ -200,12 +201,59 @@ body.find-open #findbar{ display:flex; transform:translateY(0); opacity:1; }
 /* ============================ layout ============================ */
 #app{ position:fixed; top:var(--tb-h); left:0; right:0; bottom:0; display:flex; z-index:1; }
 
-#toc{ width:var(--toc-w); flex:none; height:100%; overflow-y:auto; overflow-x:hidden;
+/* ---------------------------------------------------------------------------------------- *
+ * El índice tiene tres estados, todos como clases del body (ver applyTocMode en app.js):    *
+ *   (nada)      desplegado: #toc mide --toc-w y #tocPanel lo llena con la lista de títulos. *
+ *   .toc-rail   plegado: #toc se angosta a --rail-w y muestra #tocRail (una marca por       *
+ *               título). #tocPanel pasa a flotar a la derecha del riel, invisible.          *
+ *   .toc-peek   (sólo plegado) vista previa: #tocPanel se asoma flotando sobre el lector,   *
+ *               que NO se mueve: el texto sigue exactamente donde estaba.                   *
+ * .no-toc (documento sin títulos) y .no-doc apagan todo.                                    *
+ * ---------------------------------------------------------------------------------------- */
+#toc{ width:var(--toc-w); flex:none; height:100%; position:relative;
   background:var(--surface); border-right:1px solid var(--line-soft);
-  padding:18px 6px 28px 0;
   transition:width .26s var(--ease), opacity .2s var(--ease); }
-body.no-toc #toc{ width:0; opacity:0; pointer-events:none; }
-body.no-doc #toc{ width:0; opacity:0; pointer-events:none; }
+#tocPanel{ position:absolute; inset:0; overflow-y:auto; overflow-x:hidden;
+  padding:18px 6px 28px 0; transition:opacity .18s var(--ease); }
+
+/* plegado: el panel flota pegado al riel, apagado; el riel se enciende cuando el ancho ya cerró */
+body.toc-rail #toc{ width:var(--rail-w); overflow:visible; }
+body.toc-rail #tocPanel{ left:100%; right:auto; width:var(--toc-w); z-index:8;
+  background:var(--surface); border-right:1px solid var(--line);
+  box-shadow:22px 0 56px -26px rgba(0,0,0,.9);
+  opacity:0; transform:translateX(-10px); pointer-events:none;
+  transition:opacity .16s var(--ease), transform .2s var(--ease); }
+body.toc-rail.toc-peek #tocPanel{ opacity:1; transform:none; pointer-events:auto; }
+
+body.no-toc #toc, body.no-doc #toc{ width:0; opacity:0; pointer-events:none; }
+body.no-toc #tocRail, body.no-doc #tocRail,
+body.no-toc #tocPanel, body.no-doc #tocPanel{ pointer-events:none; }
+
+/* el riel: botón de desplegar arriba y las marcas debajo. Cada marca es un guión cuyo largo dice
+   el nivel del título (h1 largo, h2 medio, h3 corto...) y la sección que se está leyendo va en
+   acento: un mapa del documento que cabe en 18 px. Las posiciones las pone layoutRail() en
+   app.js, apoyadas en el pixel físico, y se comprimen solas si hay más títulos que alto. */
+#tocRail{ position:absolute; inset:0; display:flex; flex-direction:column;
+  opacity:0; pointer-events:none; transition:opacity .16s var(--ease); }
+body.toc-rail #tocRail{ opacity:1; pointer-events:auto; transition-delay:.14s; }
+.rail-btn{ height:30px; margin-top:4px; display:grid; place-items:center;
+  background:transparent; border:0; cursor:default; color:var(--fg-faint);
+  transition:color .14s ease, background .14s ease; }
+.rail-btn svg{ stroke:currentColor; stroke-width:1.4; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+#tocRail:hover .rail-btn{ color:var(--fg-dim); }
+.rail-btn:hover{ color:var(--accent); background:rgba(255,255,255,.045); }
+#railTicks{ position:relative; flex:1; margin:2px 0 10px; }
+.tick{ position:absolute; left:4px; width:var(--tick-w); height:var(--tick-h,2px); border-radius:1px;
+  background:var(--fg-faint); opacity:.75;
+  transition:background .16s var(--ease), opacity .16s var(--ease), width .16s var(--ease); }
+.tick::before{ content:""; position:absolute; left:-4px; right:-6px; top:-3px; bottom:-3px; } /* zona de clic más alta que la marca */
+.tick.lvl-1{ --tick-w:10px; }
+.tick.lvl-2{ --tick-w:7px; }
+.tick.lvl-3{ --tick-w:5px; }
+.tick.lvl-4,.tick.lvl-5,.tick.lvl-6{ --tick-w:3px; opacity:.5; }
+.tick:hover{ background:var(--fg-dim); opacity:1; }
+.tick.active{ background:var(--accent); opacity:1; width:calc(var(--tick-w) + 3px);
+  box-shadow:0 0 6px -1px rgba(122,162,247,.7); }
 
 /* separador arrastrable entre índice y lector: zona de agarre ancha sobre el borde del #toc,
    con una línea fina que se ilumina al hover/arrastre. Flota absoluto -> no altera el layout flex. */
@@ -216,9 +264,19 @@ body.no-doc #toc{ width:0; opacity:0; pointer-events:none; }
 #tocResizer:hover::before, body.toc-resizing #tocResizer::before{ background:var(--accent); }
 body.toc-resizing{ cursor:col-resize; user-select:none; -webkit-user-select:none; }
 body.toc-resizing #toc, body.toc-resizing #tocResizer{ transition:none; }
-body.no-toc #tocResizer, body.no-doc #tocResizer{ display:none; }
-.toc-head{ font-size:var(--px-10); letter-spacing:2.5px; text-transform:uppercase; color:var(--fg-faint);
-  padding:0 0 9px 24px; }
+body.no-toc #tocResizer, body.no-doc #tocResizer, body.toc-rail #tocResizer{ display:none; }
+
+/* cabecera del panel: la etiqueta y, a la derecha, el chevrón que lo pliega. Va siempre visible
+   pero apagado (mismo gris que la etiqueta): se enciende con el panel y se pone azul al pasar. */
+.toc-head{ display:flex; align-items:center; justify-content:space-between;
+  font-size:var(--px-10); letter-spacing:2.5px; text-transform:uppercase; color:var(--fg-faint);
+  padding:0 8px 9px 24px; }
+.toc-fold{ width:22px; height:18px; display:grid; place-items:center; border-radius:5px;
+  background:transparent; border:0; cursor:default; color:var(--fg-faint);
+  transition:color .14s ease, background .14s ease; }
+.toc-fold svg{ stroke:currentColor; stroke-width:1.4; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+#tocPanel:hover .toc-fold{ color:var(--fg-dim); }
+.toc-fold:hover{ color:var(--accent); background:rgba(255,255,255,.045); }
 /* El interior conserva SIEMPRE el ancho final del panel. Cuando #toc anima su ancho (al abrir
    un documento, al plegar el indice con T) el contenido no se re-acomoda: simplemente queda
    recortado por el overflow-x:hidden de #toc. Sin esto, cada apertura mostraba medio segundo de
@@ -512,7 +570,7 @@ body.fullscreen #progress{ top:0; }
 body.fullscreen #app{ top:0; }
 
 /* ============================ scrollbars ============================ */
-#reader::-webkit-scrollbar,#toc::-webkit-scrollbar,#content pre::-webkit-scrollbar,#content table::-webkit-scrollbar{ width:11px; height:11px; }
+#reader::-webkit-scrollbar,#tocPanel::-webkit-scrollbar,#content pre::-webkit-scrollbar,#content table::-webkit-scrollbar{ width:11px; height:11px; }
 ::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.09); border-radius:7px; border:3px solid transparent; background-clip:padding-box; }
 ::-webkit-scrollbar-thumb:hover{ background:rgba(255,255,255,.16); background-clip:padding-box; }
 ::-webkit-scrollbar-track{ background:transparent; }
