@@ -791,6 +791,12 @@ func startServer(initialPath string) string {
 		panic(err)
 	}
 
+	var activeDirMu sync.RWMutex
+	activeDocDir := ""
+	if initialPath != "" {
+		activeDocDir = filepath.Dir(initialPath)
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(sub)))
 
@@ -860,6 +866,9 @@ func startServer(initialPath string) string {
 			writeJSON(wr, map[string]any{"ok": false, "error": err.Error()})
 			return
 		}
+		activeDirMu.Lock()
+		activeDocDir = filepath.Dir(p)
+		activeDirMu.Unlock()
 		writeJSON(wr, map[string]any{
 			"ok":     true,
 			"html":   res.HTML,
@@ -904,25 +913,48 @@ func startServer(initialPath string) string {
 	})
 
 	// asset: sirve un archivo local referenciado por el documento (imagenes relativas, etc.).
+	// Mitigacion GHSA-p8rw-6xx3-gvqr: restringe assets estrictamente al arbol de la carpeta activa.
 	mux.HandleFunc("/asset", func(wr http.ResponseWriter, r *http.Request) {
 		p := r.URL.Query().Get("path")
 		if p == "" {
 			wr.WriteHeader(http.StatusForbidden)
 			return
 		}
-		f, err := os.Open(p)
+		absTarget, err := filepath.Abs(filepath.Clean(p))
+		if err != nil {
+			wr.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		activeDirMu.RLock()
+		baseDir := activeDocDir
+		activeDirMu.RUnlock()
+
+		if baseDir == "" {
+			wr.WriteHeader(http.StatusForbidden)
+			return
+		}
+
+		cleanBase := filepath.Clean(baseDir)
+		rel, err := filepath.Rel(cleanBase, absTarget)
+		if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+			wr.WriteHeader(http.StatusForbidden)
+			return
+		}
+
+		f, err := os.Open(absTarget)
 		if err != nil {
 			wr.WriteHeader(http.StatusNotFound)
 			return
 		}
 		defer f.Close()
 		st, err := f.Stat()
-		if err != nil || st.IsDir() {
+		if err != nil || !st.Mode().IsRegular() {
 			wr.WriteHeader(http.StatusNotFound)
 			return
 		}
 		wr.Header().Set("Cache-Control", "max-age=3600")
-		http.ServeContent(wr, r, filepath.Base(p), st.ModTime(), f)
+		http.ServeContent(wr, r, filepath.Base(absTarget), st.ModTime(), f)
 	})
 
 	// CSS de resaltado de codigo (chroma) generado del estilo Folio.
