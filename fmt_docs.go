@@ -14,6 +14,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -23,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"folio/i18n"
 )
 
 const (
@@ -64,7 +67,7 @@ func (ix *zipIndex) lookup(name string) *zip.File {
 func (ix *zipIndex) read(name string) ([]byte, error) {
 	f := ix.lookup(name)
 	if f == nil {
-		return nil, fmt.Errorf("falta %s", name)
+		return nil, errors.New(i18n.F("falta %s", name))
 	}
 	rc, err := f.Open()
 	if err != nil {
@@ -247,8 +250,7 @@ func convNotebook(src []byte, path string) ([]byte, error) {
 	}
 
 	var b strings.Builder
-	b.WriteString(docHeader(path, fmt.Sprintf("Jupyter · %s · %s",
-		kernel, plural(len(cells), "celda", "celdas"))))
+	b.WriteString(docHeader(path, "Jupyter · "+kernel+" · "+i18n.Nf(len(cells), "%d celda", "%d celdas", len(cells))))
 
 	for _, c := range cells {
 		srcTxt := strings.TrimRight(nbText(c.Source), "\n")
@@ -314,13 +316,13 @@ func nbRenderOutput(o nbOutput) string {
 	for _, mime := range []string{"image/png", "image/jpeg", "image/gif", "image/webp"} {
 		if v, ok := o.Data[mime]; ok {
 			if b64 := strings.ReplaceAll(nbText(v), "\n", ""); b64 != "" {
-				return "![salida](data:" + mime + ";base64," + b64 + ")\n\n"
+				return "![" + i18n.T("salida") + "](data:" + mime + ";base64," + b64 + ")\n\n"
 			}
 		}
 	}
 	if v, ok := o.Data["image/svg+xml"]; ok {
 		if svg := nbText(v); svg != "" {
-			return "![salida](data:image/svg+xml;base64," +
+			return "![" + i18n.T("salida") + "](data:image/svg+xml;base64," +
 				base64.StdEncoding.EncodeToString([]byte(svg)) + ")\n\n"
 		}
 	}
@@ -533,7 +535,7 @@ func convDocx(src []byte, docPath string) ([]byte, error) {
 	}
 	md := strings.TrimSpace(out.String())
 	if md == "" {
-		return nil, fmt.Errorf("el documento no tiene texto")
+		return nil, errors.New(i18n.T("el documento no tiene texto"))
 	}
 	// definiciones de las notas, en el orden en que aparecieron
 	var notes strings.Builder
@@ -544,7 +546,7 @@ func convDocx(src []byte, docPath string) ([]byte, error) {
 			text = endnotes[id]
 		}
 		if text == "" {
-			text = "(nota vacía)"
+			text = i18n.T("(nota vacía)")
 		}
 		fmt.Fprintf(&notes, "[^%d]: %s\n", ctx.noteN[key], text)
 	}
@@ -742,7 +744,7 @@ func docxParagraphBlock(dec *xml.Decoder, ctx *docxCtx) (string, bool) {
 						if uri := ctx.emb.dataURI("word/" + strings.TrimPrefix(tgt, "/")); uri != "" {
 							text.WriteString("![](" + uri + ")")
 						} else {
-							text.WriteString("*[imagen]*")
+							text.WriteString("*[" + i18n.T("imagen") + "]*")
 						}
 					}
 				}
@@ -1137,7 +1139,7 @@ func convODT(src []byte, docPath string) ([]byte, error) {
 					if uri := emb.dataURI(strings.TrimPrefix(href, "./")); uri != "" {
 						para.WriteString("![](" + uri + ")")
 					} else {
-						para.WriteString("*[imagen]*")
+						para.WriteString("*[" + i18n.T("imagen") + "]*")
 					}
 				}
 			case "table":
@@ -1254,7 +1256,7 @@ func convODT(src []byte, docPath string) ([]byte, error) {
 	}
 	md := strings.TrimSpace(out.String())
 	if md == "" {
-		return nil, fmt.Errorf("el documento no tiene texto")
+		return nil, errors.New(i18n.T("el documento no tiene texto"))
 	}
 	head := ""
 	if !strings.HasPrefix(md, "# ") {
@@ -1266,7 +1268,7 @@ func convODT(src []byte, docPath string) ([]byte, error) {
 			res += "\n"
 		}
 		if n == "" {
-			n = "(nota vacía)"
+			n = i18n.T("(nota vacía)")
 		}
 		res += "[^" + strconv.Itoa(i+1) + "]: " + n + "\n"
 	}
@@ -1320,7 +1322,7 @@ func convEPUB(src []byte, docPath string) ([]byte, error) {
 		} `xml:"rootfiles>rootfile"`
 	}
 	if err := xml.Unmarshal(cdata, &container); err != nil || len(container.Rootfiles) == 0 {
-		return nil, fmt.Errorf("EPUB sin rootfile")
+		return nil, errors.New(i18n.T("EPUB sin rootfile"))
 	}
 	opfPath := container.Rootfiles[0].Path
 	opfData, err := ix.read(opfPath)
@@ -1434,7 +1436,7 @@ func convEPUB(src []byte, docPath string) ([]byte, error) {
 		read++
 	}
 	if read == 0 {
-		return nil, fmt.Errorf("no se pudo leer ningún capítulo")
+		return nil, errors.New(i18n.T("no se pudo leer ningún capítulo"))
 	}
 
 	var b strings.Builder
@@ -1449,7 +1451,7 @@ func convEPUB(src []byte, docPath string) ([]byte, error) {
 	if author != "" {
 		b.WriteString("*" + mdEscape(author) + "*\n\n")
 	}
-	b.WriteString(fmt.Sprintf("*EPUB · %s*\n\n", plural(read, "capítulo", "capítulos")))
+	b.WriteString("*EPUB · " + i18n.Nf(read, "%d capítulo", "%d capítulos", read) + "*\n\n")
 	b.WriteString(body.String())
 	return []byte(b.String()), nil
 }

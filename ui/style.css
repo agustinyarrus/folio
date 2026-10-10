@@ -140,6 +140,11 @@ body.live-on .tb-center .live{ opacity:.8; }
 .tbtn svg{ stroke:currentColor; stroke-width:1.4; fill:none; stroke-linecap:round; stroke-linejoin:round; }
 .tbtn:hover{ color:var(--fg-strong); background:rgba(255,255,255,.045); }
 .tbtn.on{ color:var(--accent); }
+/* los botones del cromo no se recorren con Tab (tabindex=-1): un clic no les deja el anillo de foco */
+.tbtn:focus, .winbtn:focus, .rail-btn:focus, .toc-fold:focus, .find-nav:focus{ outline:none; }
+/* idioma: el código del idioma actual, en el mismo cuerpo y gris que los íconos de al lado */
+.tbtn-lang span{ font-size:var(--px-10); font-weight:300; letter-spacing:1.6px; text-transform:uppercase;
+  line-height:1; padding-left:1.6px; /* compensa el espaciado de la última letra: queda centrado */ }
 .tb-sep{ width:1px; height:16px; background:var(--line); margin:0 6px; }
 
 .winbtn{ width:46px; height:var(--tb-h); display:grid; place-items:center;
@@ -540,7 +545,7 @@ body.has-doc #empty{ opacity:0; pointer-events:none; }
 .empty-hints b{ color:var(--fg-dim); font-weight:400; }
 
 /* arrastrando un archivo encima */
-body.dragover #reader::after{ content:"Soltá para abrir"; position:absolute; inset:14px;
+body.dragover #reader::after{ content:attr(data-drop); position:absolute; inset:14px;
   display:flex; align-items:center; justify-content:center; z-index:30; font-size:var(--px-13); color:var(--accent);
   border:1.5px dashed rgba(122,162,247,.5); border-radius:14px; background:rgba(122,162,247,.06);
   backdrop-filter:blur(2px); }

@@ -16,6 +16,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"folio/i18n"
 )
 
 // replaceSubmatches es ReplaceAllStringFunc pero entregando los grupos: evita el doble
@@ -79,7 +81,7 @@ func (f *footnotes) render() string {
 	b.WriteString("\n")
 	for i, d := range f.defs {
 		if d == "" {
-			d = "(nota vacía)"
+			d = i18n.T("(nota vacía)")
 		}
 		b.WriteString("[^" + strconv.Itoa(i+1) + "]: " + d + "\n")
 	}
@@ -1236,5 +1238,5 @@ func docHeaderIfNeeded(out []string, path string) string {
 		}
 		break
 	}
-	return docHeader(path, FormatName(path))
+	return docHeader(path, formatLabel(path))
 }

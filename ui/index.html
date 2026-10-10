@@ -26,28 +26,29 @@
 
     <div class="tb-center" id="caption">
       <span class="name" id="capName"></span>
-      <span class="live" id="capLive" title="Recarga en vivo activa"></span>
+      <span class="live" id="capLive" data-i18n title="Recarga en vivo activa"></span>
     </div>
 
     <div class="tb-right">
-      <button class="tbtn" id="btnOutline" title="Índice (T)" tabindex="-1">
+      <button class="tbtn" id="btnOutline" data-i18n title="Índice (T)" tabindex="-1">
         <svg width="15" height="15" viewBox="0 0 16 16"><line x1="3" y1="4" x2="13" y2="4"/><line x1="3" y1="8" x2="11" y2="8"/><line x1="3" y1="12" x2="9" y2="12"/></svg>
       </button>
-      <button class="tbtn" id="btnFind" title="Buscar (Ctrl F)" tabindex="-1">
+      <button class="tbtn" id="btnFind" data-i18n title="Buscar (Ctrl F)" tabindex="-1">
         <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.2"/><line x1="10.2" y1="10.2" x2="13.5" y2="13.5"/></svg>
       </button>
-      <button class="tbtn" id="btnOpen" title="Abrir (Ctrl O)" tabindex="-1">
+      <button class="tbtn" id="btnOpen" data-i18n title="Abrir (Ctrl O)" tabindex="-1">
         <svg width="15" height="15" viewBox="0 0 16 16"><path d="M2.5 4.5a1 1 0 0 1 1-1H7l1.4 1.6H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1Z"/></svg>
       </button>
+      <button class="tbtn tbtn-lang" id="btnLang" tabindex="-1"><span id="langCode"></span></button>
       <span class="tb-sep"></span>
-      <button class="winbtn" id="btnMin" title="Minimizar" tabindex="-1">
+      <button class="winbtn" id="btnMin" data-i18n title="Minimizar" tabindex="-1">
         <svg width="11" height="11" viewBox="0 0 11 11"><line x1="1.5" y1="5.5" x2="9.5" y2="5.5"/></svg>
       </button>
-      <button class="winbtn" id="btnMax" title="Maximizar" tabindex="-1">
+      <button class="winbtn" id="btnMax" data-i18n title="Maximizar" tabindex="-1">
         <svg class="ico-max" width="11" height="11" viewBox="0 0 11 11"><rect x="1.5" y="1.5" width="8" height="8" rx="1.2"/></svg>
         <svg class="ico-rst" width="11" height="11" viewBox="0 0 11 11"><rect x="1.5" y="3" width="6.5" height="6.5" rx="1.1"/><path d="M3.6 3V2.2a1 1 0 0 1 1-1h4.2a1 1 0 0 1 1 1v4.2a1 1 0 0 1-1 1H8.2"/></svg>
       </button>
-      <button class="winbtn winbtn-close" id="btnClose" title="Cerrar" tabindex="-1">
+      <button class="winbtn winbtn-close" id="btnClose" data-i18n title="Cerrar" tabindex="-1">
         <svg width="11" height="11" viewBox="0 0 11 11"><line x1="1.8" y1="1.8" x2="9.2" y2="9.2"/><line x1="9.2" y1="1.8" x2="1.8" y2="9.2"/></svg>
       </button>
     </div>
@@ -72,15 +73,15 @@
   <!-- barra de busqueda -->
   <div id="findbar">
     <svg class="find-ico" width="13" height="13" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.2"/><line x1="10.2" y1="10.2" x2="13.5" y2="13.5"/></svg>
-    <input id="findInput" type="text" placeholder="Buscar…" spellcheck="false" autocomplete="off">
+    <input id="findInput" data-i18n type="text" placeholder="Buscar…" spellcheck="false" autocomplete="off">
     <span id="findCount" class="find-count"></span>
-    <button id="findPrev" class="find-nav" title="Anterior (Shift Enter)" tabindex="-1">
+    <button id="findPrev" class="find-nav" data-i18n title="Anterior (Shift Enter)" tabindex="-1">
       <svg width="12" height="12" viewBox="0 0 16 16"><polyline points="11 10 8 5 5 10"/></svg>
     </button>
-    <button id="findNext" class="find-nav" title="Siguiente (Enter)" tabindex="-1">
+    <button id="findNext" class="find-nav" data-i18n title="Siguiente (Enter)" tabindex="-1">
       <svg width="12" height="12" viewBox="0 0 16 16"><polyline points="5 6 8 11 11 6"/></svg>
     </button>
-    <button id="findClose" class="find-nav" title="Cerrar (Esc)" tabindex="-1">
+    <button id="findClose" class="find-nav" data-i18n title="Cerrar (Esc)" tabindex="-1">
       <svg width="12" height="12" viewBox="0 0 16 16"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>
     </button>
   </div>
@@ -92,16 +93,16 @@
          acento; al pasar el mouse el panel se asoma flotando sobre el texto (vista previa) sin
          mover nada del lector. -->
     <aside id="toc">
-      <div id="tocRail" aria-label="Índice plegado">
-        <button class="rail-btn" id="btnTocUnfold" title="Desplegar el índice (T)" tabindex="-1">
+      <div id="tocRail" data-i18n aria-label="Índice plegado">
+        <button class="rail-btn" id="btnTocUnfold" data-i18n title="Desplegar el índice (T)" tabindex="-1">
           <svg width="12" height="12" viewBox="0 0 16 16"><line x1="3" y1="3" x2="3" y2="13"/><polyline points="7 4 11 8 7 12"/></svg>
         </button>
         <div id="railTicks"></div>
       </div>
       <div id="tocPanel">
         <div class="toc-head">
-          <span class="toc-head-label">Índice</span>
-          <button class="toc-fold" id="btnTocFold" title="Plegar el índice (T)" tabindex="-1">
+          <span class="toc-head-label" data-i18n>Índice</span>
+          <button class="toc-fold" id="btnTocFold" data-i18n title="Plegar el índice (T)" tabindex="-1">
             <svg width="12" height="12" viewBox="0 0 16 16"><line x1="3" y1="3" x2="3" y2="13"/><polyline points="12 4 8 8 12 12"/></svg>
           </button>
         </div>
@@ -110,7 +111,7 @@
     </aside>
 
     <!-- separador arrastrable: ancho del índice (doble clic = restablecer) -->
-    <div id="tocResizer" title="Arrastrá para el ancho del índice · doble clic restablece"></div>
+    <div id="tocResizer" data-i18n title="Arrastrá para el ancho del índice · doble clic restablece"></div>
 
     <main id="reader">
       <article id="content"></article>
@@ -126,16 +127,17 @@
             <line class="e-ln" x1="37" y1="70" x2="58" y2="70"/>
           </svg>
         </div>
-        <div class="empty-title">Arrastrá un documento</div>
-        <div class="empty-sub">Markdown · GFM · matemática · diagramas</div>
+        <div class="empty-title" data-i18n>Arrastrá un documento</div>
+        <div class="empty-sub" data-i18n>Markdown · GFM · matemática · diagramas</div>
         <div class="empty-row">
-          <button id="emptyOpen" class="open-btn">Abrir<span class="kbd">Ctrl O</span></button>
+          <button id="emptyOpen" class="open-btn" data-i18n>Abrir<span class="kbd">Ctrl O</span></button>
         </div>
         <div class="empty-hints">
-          <span><b>T</b> índice</span>
-          <span><b>Ctrl F</b> buscar</span>
-          <span><b>Ctrl ±</b> tamaño</span>
-          <span><b>F</b> pantalla completa</span>
+          <span data-i18n><b>T</b> índice</span>
+          <span data-i18n><b>Ctrl F</b> buscar</span>
+          <span data-i18n><b>Ctrl ±</b> tamaño</span>
+          <span data-i18n><b>F</b> pantalla completa</span>
+          <span data-i18n><b>L</b> idioma</span>
         </div>
       </div>
 
@@ -146,6 +148,7 @@
 <!-- KaTeX (265KB) y mermaid (3.2MB) se cargan BAJO DEMANDA desde app.js (sólo si el documento
      los usa): así el arranque no paga su parseo. DOMPurify sí va eager (se usa en cada render). -->
 <script src="/vendor/dompurify/purify.min.js"></script>
+<script src="/i18n.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

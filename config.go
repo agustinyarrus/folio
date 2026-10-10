@@ -9,6 +9,7 @@ package main
 //   - tocOpen : índice desplegado (true) o plegado en el riel de marcas (false)
 //   - tocWidth: ancho del índice desplegado, en px
 //   - window  : geometría de la ventana (se guarda al cerrar, en WM_CLOSE)
+//   - lang    : idioma elegido con el botón de la barra ("es" / "en"); vacío = el de Windows
 
 import (
 	"encoding/json"
@@ -30,6 +31,7 @@ type appConfig struct {
 	TocOpen  *bool    `json:"tocOpen"`
 	TocWidth int      `json:"tocWidth"` // ancho del índice en px (0 = default)
 	Window   *winGeom `json:"window"`
+	Lang     string   `json:"lang,omitempty"` // "es", "en" o vacío (automático)
 }
 
 func clampInt(v, lo, hi int) int {
@@ -106,6 +108,25 @@ func saveWindowGeom(g winGeom) {
 	gCfgMu.Lock()
 	defer gCfgMu.Unlock()
 	gCfg.Window = &g
+	saveConfigLocked()
+}
+
+// langSetting es el idioma guardado ("" = automático, que decide Windows).
+func langSetting() string {
+	gCfgMu.Lock()
+	defer gCfgMu.Unlock()
+	return gCfg.Lang
+}
+
+// setLangSetting guarda la elección del usuario. Sólo "es" o "en": cualquier otra cosa vuelve a
+// automático, así un config.json editado a mano nunca deja la app en un idioma inexistente.
+func setLangSetting(code string) {
+	if code != "es" && code != "en" {
+		code = ""
+	}
+	gCfgMu.Lock()
+	defer gCfgMu.Unlock()
+	gCfg.Lang = code
 	saveConfigLocked()
 }
 

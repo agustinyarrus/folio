@@ -12,6 +12,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -21,6 +22,8 @@ import (
 	"unicode/utf16"
 
 	"github.com/alecthomas/chroma/v2/lexers"
+
+	"folio/i18n"
 )
 
 // converter transforma el contenido de un archivo en Markdown.
@@ -48,8 +51,8 @@ var formats = []format{
 	{Name: "XML", Exts: []string{".xml", ".xsd", ".xsl", ".xslt", ".rss", ".atom", ".plist", ".resx", ".csproj", ".props"}, Conv: convXML},
 	{Name: "Diff", Exts: []string{".diff", ".patch"}, Conv: convHighlight},
 	// los .reg que exporta regedit vienen en UTF-16 LE: los endereza decodeText
-	{Name: "Registro de Windows", Exts: []string{".reg"}, Conv: convHighlight},
-	{Name: "Texto", Exts: []string{".txt", ".log", ".nfo", ".me", ".readme", ".1st"}, Conv: convText},
+	{Name: i18n.M("Registro de Windows"), Exts: []string{".reg"}, Conv: convHighlight},
+	{Name: i18n.M("Texto"), Exts: []string{".txt", ".log", ".nfo", ".me", ".readme", ".1st"}, Conv: convText},
 
 	// --- marcado ---------------------------------------------------------
 	{Name: "reStructuredText", Exts: []string{".rst", ".rest"}, Conv: convRST},
@@ -98,7 +101,8 @@ func IsSupported(name string) bool {
 	return codeLexerName(name) != ""
 }
 
-// FormatName devuelve el nombre legible del formato ("JSON", "Go", "Markdown"…).
+// FormatName devuelve el nombre del formato ("JSON", "Go", "Markdown"…) en castellano, el idioma
+// fuente: es el que usa la lógica (binaryFormats). Para mostrarlo va formatLabel.
 func FormatName(name string) string {
 	if f, ok := extFormat[extOf(name)]; ok {
 		return f.Name
@@ -116,7 +120,7 @@ func FormatName(name string) string {
 	if e := extOf(name); e != "" {
 		return strings.ToUpper(strings.TrimPrefix(e, "."))
 	}
-	return "Texto"
+	return i18n.M("Texto")
 }
 
 // Nombres donde chroma se manda una macana: go.mod matchea el lexer de AMPL,
@@ -242,7 +246,7 @@ func readDocument(path string) ([]byte, error) {
 	limit := int64(maxSourceBytes) + 1
 	if binaryFormats[FormatName(path)] {
 		if fi, err := f.Stat(); err == nil && fi.Size() > maxContainerBytes {
-			return nil, fmt.Errorf("el documento pesa %d MB: el tope es %d MB", fi.Size()>>20, maxContainerBytes>>20)
+			return nil, errors.New(i18n.F("el documento pesa %d MB: el tope es %d MB", fi.Size()>>20, maxContainerBytes>>20))
 		}
 		limit = maxContainerBytes
 	}
@@ -256,7 +260,7 @@ func toMarkdown(src []byte, path string) ([]byte, string) {
 	name := FormatName(path)
 	if len(src) > maxSourceBytes {
 		src = append(src[:maxSourceBytes:maxSourceBytes],
-			[]byte("\n\n… (archivo truncado)\n")...)
+			[]byte("\n\n… ("+i18n.T("archivo truncado")+")\n")...)
 	}
 	f, ok := extFormat[extOf(path)]
 	if !binaryFormats[name] {
@@ -328,8 +332,8 @@ func looksBinary(src []byte) bool {
 // binaryNotice arma la vista de un archivo binario: aviso + volcado hexadecimal.
 func binaryNotice(src []byte, path string) string {
 	var b strings.Builder
-	b.WriteString(docHeader(path, fmt.Sprintf("archivo binario · %d bytes", len(src))))
-	b.WriteString("> [!WARNING]\n> Esto no es texto. Van los primeros bytes, por las dudas.\n\n")
+	b.WriteString(docHeader(path, i18n.F("archivo binario · %d bytes", len(src))))
+	b.WriteString("> [!WARNING]\n> " + i18n.T("Esto no es texto. Van los primeros bytes, por las dudas.") + "\n\n")
 	n := len(src)
 	if n > 1024 {
 		n = 1024
@@ -367,8 +371,8 @@ func convFallback(src []byte, path string, err error) []byte {
 	var b strings.Builder
 	b.WriteString("# " + mdEscape(filepath.Base(path)) + "\n\n")
 	if err != nil {
-		b.WriteString("> [!WARNING]\n> No se pudo interpretar el archivo (" +
-			mdEscape(err.Error()) + "). Va el contenido crudo.\n\n")
+		b.WriteString("> [!WARNING]\n> " + i18n.F("No se pudo interpretar el archivo (%s). Va el contenido crudo.",
+			mdEscape(err.Error())) + "\n\n")
 	}
 	b.WriteString(codeBlock(string(src), ""))
 	return []byte(b.String())
@@ -480,9 +484,11 @@ func docHeader(path, sub string) string {
 	return h
 }
 
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return fmt.Sprintf("%d %s", n, one)
-	}
-	return fmt.Sprintf("%d %s", n, many)
+// formatLabel es el nombre del formato para mostrar, en el idioma de la interfaz.
+func formatLabel(path string) string { return i18n.T(FormatName(path)) }
+
+// lineCount: "12 líneas" / "12 lines", el subtítulo de un archivo de texto.
+func lineCount(src []byte) string {
+	n := countLines(src)
+	return i18n.Nf(n, "%d línea", "%d líneas", n)
 }

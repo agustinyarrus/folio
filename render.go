@@ -39,6 +39,8 @@ import (
 	gmhtml "github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
+
+	"folio/i18n"
 )
 
 // Las extensiones y el catalogo de formatos viven en formats.go: lo que no es
@@ -141,7 +143,7 @@ func Render(src []byte, docPath string) (RenderResult, error) {
 		return RenderResult{}, err
 	}
 
-	res := RenderResult{HTML: buf.String(), Format: format}
+	res := RenderResult{HTML: buf.String(), Format: i18n.T(format)} // el nombre, en el idioma de la UI
 	if v, ok := pc.Get(tocKey).([]TocItem); ok {
 		res.Toc = v
 	}

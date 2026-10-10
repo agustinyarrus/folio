@@ -19,10 +19,13 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"folio/i18n"
 )
 
 // ---- codigo y texto ------------------------------------------------------
@@ -34,13 +37,13 @@ func convCode(src []byte, path string) ([]byte, error) {
 	if len(src) > maxHighlightBytes {
 		lang = "" // demasiado grande para tokenizar: va plano
 	}
-	sub := FormatName(path) + " · " + plural(countLines(src), "línea", "líneas")
+	sub := formatLabel(path) + " · " + lineCount(src)
 	return []byte(docHeader(path, sub) + codeBlock(string(src), lang)), nil
 }
 
 // convText: texto plano. Sin resaltado, pero respetando el formato original.
 func convText(src []byte, path string) ([]byte, error) {
-	sub := plural(countLines(src), "línea", "líneas")
+	sub := lineCount(src)
 	return []byte(docHeader(path, sub) + codeBlock(string(src), "")), nil
 }
 
@@ -54,7 +57,7 @@ func convHighlight(src []byte, path string) ([]byte, error) {
 	if len(src) > maxHighlightBytes {
 		lang = ""
 	}
-	sub := FormatName(path) + " · " + plural(countLines(src), "línea", "líneas")
+	sub := formatLabel(path) + " · " + lineCount(src)
 	return []byte(docHeader(path, sub) + codeBlock(string(src), lang)), nil
 }
 
@@ -64,7 +67,7 @@ func convXML(src []byte, path string) ([]byte, error) {
 	if len(src) > maxHighlightBytes {
 		lang = ""
 	}
-	sub := FormatName(path) + " · " + plural(countLines(src), "línea", "líneas")
+	sub := formatLabel(path) + " · " + lineCount(src)
 	return []byte(docHeader(path, sub) + codeBlock(string(src), lang)), nil
 }
 
@@ -186,7 +189,7 @@ func decodeOrdered(dec *json.Decoder) (any, error) {
 		_, err := dec.Token() // ']'
 		return arr, err
 	}
-	return nil, fmt.Errorf("delimitador inesperado %q", delim)
+	return nil, errors.New(i18n.F("delimitador inesperado %q", delim))
 }
 
 // jsonRecords extrae los objetos de un arreglo JSON de nivel superior, si lo es.
@@ -282,11 +285,11 @@ func recordsTable(rows []*jsonObject, total int) string {
 	}
 	out := mdTableAligned(cols, cells, align)
 	if total > len(rows) {
-		out += fmt.Sprintf("*(se muestran %d de %d filas)*\n\n", len(rows), total)
+		out += "*(" + i18n.F("se muestran %d de %d filas", len(rows), total) + ")*\n\n"
 	}
 	if extra := countDistinctKeys(rows) - len(cols); extra > 0 {
-		out += fmt.Sprintf("*(%s más no entran en la tabla: están en el JSON completo)*\n\n",
-			plural(extra, "columna", "columnas"))
+		out += "*(" + i18n.Nf(extra, "%d columna más no entra en la tabla: está en el JSON completo",
+			"%d columnas más no entran en la tabla: están en el JSON completo", extra) + ")*\n\n"
 	}
 	return out
 }
@@ -337,9 +340,9 @@ func convJSON(src []byte, path string) ([]byte, error) {
 	sub := FormatName(path)
 	switch {
 	case relaxed:
-		sub += " · con comentarios"
+		sub += " · " + i18n.T("con comentarios")
 	case !strict:
-		sub += " · con errores de sintaxis"
+		sub += " · " + i18n.T("con errores de sintaxis")
 	}
 
 	body, lang := string(src), "json"
@@ -349,7 +352,7 @@ func convJSON(src []byte, path string) ([]byte, error) {
 		var pretty bytes.Buffer
 		if json.Indent(&pretty, trimmed, "", "  ") == nil {
 			body = pretty.String()
-			sub += " · reformateado"
+			sub += " · " + i18n.T("reformateado")
 		}
 	}
 	if len(body) > maxHighlightBytes {
@@ -362,7 +365,7 @@ func convJSON(src []byte, path string) ([]byte, error) {
 		if rows, total, ok := jsonRecords(data); ok {
 			if tbl := recordsTable(rows, total); tbl != "" {
 				b.WriteString(tbl)
-				b.WriteString(detailsBlock("Ver el JSON completo", codeBlock(body, lang)))
+				b.WriteString(detailsBlock(i18n.T("Ver el JSON completo"), codeBlock(body, lang)))
 				return []byte(b.String()), nil
 			}
 		}
@@ -397,16 +400,16 @@ func convJSONL(src []byte, path string) ([]byte, error) {
 			rows = append(rows, obj)
 		}
 	}
-	sub := fmt.Sprintf("%s · %s", FormatName(path), plural(total, "registro", "registros"))
+	sub := formatLabel(path) + " · " + i18n.Nf(total, "%d registro", "%d registros", total)
 	if bad > 0 {
-		sub += fmt.Sprintf(" · %s no se pudieron leer", plural(bad, "línea", "líneas"))
+		sub += " · " + i18n.Nf(bad, "%d línea no se pudo leer", "%d líneas no se pudieron leer", bad)
 	}
 	var b strings.Builder
 	b.WriteString(docHeader(path, sub))
 	if nonObject == 0 && len(rows) > 0 {
 		if tbl := recordsTable(rows, total); tbl != "" {
 			b.WriteString(tbl)
-			b.WriteString(detailsBlock("Ver el archivo completo", codeBlock(string(src), "json")))
+			b.WriteString(detailsBlock(i18n.T("Ver el archivo completo"), codeBlock(string(src), "json")))
 			return []byte(b.String()), nil
 		}
 	}
@@ -613,7 +616,7 @@ func convCSV(src []byte, path string) ([]byte, error) {
 		return nil, err
 	}
 	if len(recs) == 0 {
-		return []byte(docHeader(path, "vacío")), nil
+		return []byte(docHeader(path, i18n.T("vacío"))), nil
 	}
 	head := recs[0]
 	allCols := len(head)
@@ -626,20 +629,20 @@ func convCSV(src []byte, path string) ([]byte, error) {
 		rows = rows[:maxTableRows]
 		truncated = true
 	}
-	sub := fmt.Sprintf("%s · %s × %s", FormatName(path),
-		plural(len(recs)-1, "fila", "filas"), plural(allCols, "columna", "columnas"))
+	nFilas := len(recs) - 1
+	sub := formatLabel(path) + " · " + i18n.Nf(nFilas, "%d fila", "%d filas", nFilas) +
+		" × " + i18n.Nf(allCols, "%d columna", "%d columnas", allCols)
 	var b strings.Builder
 	b.WriteString(docHeader(path, sub))
 	b.WriteString(mdTableAligned(head, rows, numericColumns(len(head), rows)))
 	if truncated {
-		b.WriteString(fmt.Sprintf("*(se muestran %d de %d filas)*\n\n", maxTableRows, len(recs)-1))
+		b.WriteString("*(" + i18n.F("se muestran %d de %d filas", maxTableRows, nFilas) + ")*\n\n")
 	}
 	if allCols > maxTableCols {
-		b.WriteString(fmt.Sprintf("*(se muestran %d de %d columnas)*\n\n", maxTableCols, allCols))
+		b.WriteString("*(" + i18n.F("se muestran %d de %d columnas", maxTableCols, allCols) + ")*\n\n")
 	}
 	if err != nil {
-		b.WriteString("> [!WARNING]\n> El archivo tiene filas mal formadas: " +
-			mdEscape(err.Error()) + "\n\n")
+		b.WriteString("> [!WARNING]\n> " + i18n.F("El archivo tiene filas mal formadas: %s", mdEscape(err.Error())) + "\n\n")
 	}
 	return []byte(b.String()), nil
 }

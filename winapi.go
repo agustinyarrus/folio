@@ -12,6 +12,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"folio/i18n"
 )
 
 const ptrSize = unsafe.Sizeof(uintptr(0))
@@ -134,12 +136,12 @@ func pickMarkdown(owner uintptr) string {
 	comCall(dlg, mSetOptions, uintptr(opts|fosForceFS))
 
 	specs := []comdlgFilterSpec{
-		{utf16Ptr("Documentos"), utf16Ptr(OpenGlob())},
+		{utf16Ptr(i18n.T("Documentos")), utf16Ptr(OpenGlob())},
 		{utf16Ptr("Markdown"), utf16Ptr(MarkdownGlob)},
-		{utf16Ptr("Todos los archivos"), utf16Ptr("*.*")},
+		{utf16Ptr(i18n.T("Todos los archivos")), utf16Ptr("*.*")},
 	}
 	comCall(dlg, mSetFileTypes, uintptr(len(specs)), uintptr(unsafe.Pointer(&specs[0])))
-	comCall(dlg, mSetTitle, utf16Ptr("Abrir documento"))
+	comCall(dlg, mSetTitle, utf16Ptr(i18n.T("Abrir documento")))
 
 	if comCall(dlg, mShow, owner) < 0 {
 		return "" // cancelado por el usuario

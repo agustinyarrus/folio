@@ -24,7 +24,9 @@ function bridge(name, ...args) {
 }
 
 // ---- estado -------------------------------------------------------------
-const current = { path: null, name: '', dir: '', html: '' };
+// raw: los bytes de un documento soltado (sin ruta en disco), para volver a pedirlo al cambiar de
+// idioma; meta: lo que muestra el título de la barra al pasar el mouse.
+const current = { path: null, name: '', dir: '', html: '', raw: null, meta: null };
 let es = null;               // EventSource de recarga en vivo
 let mermaidReady = false;
 let tocOpen = window.__FOLIO_TOC__ !== false;   // inyectado por el host desde el config
@@ -47,8 +49,8 @@ async function openPath(path, opts = {}) {
     const r = await fetch('/render?path=' + encodeURIComponent(path));
     const j = await r.json();
     if (seq !== openSeq) return;           // mientras tanto se pidio otro documento
-    if (!j.ok) { toast(j.error || 'No se pudo abrir'); return; }
-    current.path = j.path; current.name = j.name; current.dir = j.dir;
+    if (!j.ok) { toast(j.error || t('No se pudo abrir')); return; }
+    current.path = j.path; current.name = j.name; current.dir = j.dir; current.raw = null;
     paintText(j, opts);
     watch(j.path);
     body.classList.add('live-on');
@@ -56,28 +58,29 @@ async function openPath(path, opts = {}) {
     if (seq !== openSeq) return;
     if (opts.frag) scrollToAnchor(opts.frag, 'auto'); // saltar a #sección si vino de un doc#sec
     renderMermaid();      // mermaid (lazy + pesado): que aparezca después, sin bloquear
-  } catch (e) { window.__log('open ' + e); toast('Error al abrir'); }
+  } catch (e) { window.__log('open ' + e); toast(t('Error al abrir')); }
 }
 window.__folioOpen = (p) => openPath(p);   // el host lo llama por Eval
 
 // Arrastrar-y-soltar: render del archivo crudo (sin ruta -> sin assets relativos ni recarga
 // viva). Se mandan los bytes tal cual, asi entran tambien los binarios (.docx, .odt, .epub).
-async function renderRawText(bytes, name) {
+async function renderRawText(bytes, name, opts = {}) {
   const seq = ++openSeq;
   try {
-    const r = await fetch('/render-text?name=' + encodeURIComponent(name || 'documento.md'), {
+    const r = await fetch('/render-text?name=' + encodeURIComponent(name || t('documento.md')), {
       method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: bytes,
     });
     const j = await r.json();
     if (seq !== openSeq) return;
-    if (!j.ok) { toast('No se pudo abrir'); return; }
+    if (!j.ok) { toast(t('No se pudo abrir')); return; }
     current.path = null; current.name = j.name; current.dir = '';
+    current.raw = { bytes, name };
     if (es) { es.close(); es = null; }
     body.classList.remove('live-on');
-    paintText(j, {});
+    paintText(j, opts);
     await renderMath();
     renderMermaid();
-  } catch (e) { window.__log('drop ' + e); toast('Error al abrir'); }
+  } catch (e) { window.__log('drop ' + e); toast(t('Error al abrir')); }
 }
 
 // paintText inyecta el HTML y los realces SÍNCRONOS (instantáneos). KaTeX/mermaid van aparte
@@ -88,11 +91,9 @@ function paintText(j, opts) {
   textIndex = null;                       // la busqueda se reindexa en la proxima consulta
   body.classList.add('has-doc');
   body.classList.remove('no-doc', 'empty');
-  const cap = $('capName');
-  cap.textContent = j.title || j.name || '';
-  // al pasar el mouse por el título: archivo, formato de origen y palabras
-  cap.title = [j.name, j.format, j.words ? j.words.toLocaleString('es-AR') + ' palabras' : '']
-    .filter(Boolean).join('   ·   ');
+  $('capName').textContent = j.title || j.name || '';
+  current.meta = { name: j.name, format: j.format, words: j.words };
+  paintCaptionTitle();
   addCopyButtons();
   addAnchors();
   collectHeadings();
@@ -100,6 +101,14 @@ function paintText(j, opts) {
   if (!opts.silent) { reader.scrollTop = 0; updateProgress(); }
   if (body.classList.contains('find-open') && $('findInput').value) runFind($('findInput').value);
   window.__log('painted ' + (j.name || ''));
+}
+
+// al pasar el mouse por el título: archivo, formato de origen y palabras (en el idioma de la UI)
+function paintCaptionTitle() {
+  const m = current.meta;
+  if (!m) return;
+  const words = m.words ? tn(m.words, '{n} palabra', '{n} palabras', { n: I18N.num(m.words) }) : '';
+  $('capName').title = [m.name, m.format, words].filter(Boolean).join('   ·   ');
 }
 
 // ---- carga perezosa de librerías pesadas --------------------------------
@@ -204,11 +213,12 @@ function addCopyButtons() {
     const pre = block.querySelector('pre'); if (!pre) return;
     const btn = document.createElement('button');
     btn.className = 'copy-btn'; btn.tabIndex = -1;
-    btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" style="stroke:currentColor;stroke-width:1.4;fill:none;stroke-linejoin:round"><rect x="5" y="5" width="8.5" height="9.5" rx="1.6"/><path d="M11 5V3.6A1.6 1.6 0 0 0 9.4 2H4A1.6 1.6 0 0 0 2.5 3.6V11"/></svg><span>Copiar</span>';
+    btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" style="stroke:currentColor;stroke-width:1.4;fill:none;stroke-linejoin:round"><rect x="5" y="5" width="8.5" height="9.5" rx="1.6"/><path d="M11 5V3.6A1.6 1.6 0 0 0 9.4 2H4A1.6 1.6 0 0 0 2.5 3.6V11"/></svg><span></span>';
+    btn.querySelector('span').textContent = t('Copiar');
     btn.addEventListener('click', async () => {
       await copyText(pre.innerText, pre);
-      btn.classList.add('done'); btn.querySelector('span').textContent = 'Copiado';
-      setTimeout(() => { btn.classList.remove('done'); btn.querySelector('span').textContent = 'Copiar'; }, 1400);
+      btn.classList.add('done'); btn.querySelector('span').textContent = t('Copiado');
+      setTimeout(() => { btn.classList.remove('done'); btn.querySelector('span').textContent = t('Copiar'); }, 1400);
     });
     block.appendChild(btn);
   });
@@ -845,6 +855,7 @@ $('btnTocFold').addEventListener('click', () => setTocOpen(false));
 $('btnTocUnfold').addEventListener('click', () => setTocOpen(true));
 $('btnFind').addEventListener('click', openFind);
 $('btnOpen').addEventListener('click', () => bridge('folioPick'));
+$('btnLang').addEventListener('click', () => toggleLang());
 $('emptyOpen').addEventListener('click', () => bridge('folioPick'));
 
 const DBLCLICK_MS = 300;
@@ -910,6 +921,7 @@ window.addEventListener('keydown', (e) => {
 
   switch (e.key) {
     case 't': case 'T': e.preventDefault(); toggleToc(); break;
+    case 'l': case 'L': e.preventDefault(); toggleLang(); break;
     case 'f': case 'F': case 'F11': e.preventDefault(); setFullscreen(!isFs); break;
     case '/': e.preventDefault(); openFind(); break;
     case 'Escape':
@@ -940,9 +952,52 @@ window.addEventListener('drop', async (e) => {
   e.preventDefault(); body.classList.remove('dragover');
   const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
   if (!f) return;
-  if (dropNo.test(f.name)) { toast('Folio no abre ese formato'); return; }
-  try { renderRawText(await f.arrayBuffer(), f.name); } catch (err) { window.__log('drop ' + err); toast('No se pudo leer'); }
+  if (dropNo.test(f.name)) { toast(t('Folio no abre ese formato')); return; }
+  try { renderRawText(await f.arrayBuffer(), f.name); } catch (err) { window.__log('drop ' + err); toast(t('No se pudo leer')); }
 });
+
+// =========================================================================
+// Idioma (castellano / inglés)
+//
+// El botón de la barra muestra el idioma ACTUAL; tocarlo (o la tecla L) pasa al otro. El host lo
+// guarda en config.json y desde ahí también el Go arma sus textos en el idioma nuevo: los
+// subtítulos de los formatos convertidos, los avisos y el diálogo de abrir. Por eso, además de
+// re-traducir la página, se vuelve a pedir el documento (anclado al párrafo que se leía).
+// =========================================================================
+const LANG_NAMES = { es: 'Español', en: 'English' };
+function paintLangButton() {
+  const cur = I18N.lang, next = cur === 'es' ? 'en' : 'es';
+  $('langCode').textContent = cur;
+  $('btnLang').title = t('Idioma: {actual} · pasar a {otro} (L)', { actual: LANG_NAMES[cur], otro: LANG_NAMES[next] });
+  reader.dataset.drop = t('Soltá para abrir');
+}
+let langBusy = false;   // un doble clic no manda dos cambios cruzados
+async function toggleLang() {
+  if (langBusy) return;
+  langBusy = true;
+  const next = I18N.lang === 'es' ? 'en' : 'es';
+  try {
+    const r = await fetch('/api/lang', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang: next }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    I18N.set((await r.json()).lang);
+  } catch (e) { window.__log('lang ' + e); toast(t('No se pudo cambiar el idioma')); }
+  finally { langBusy = false; }
+}
+window.addEventListener('i18n', async () => {
+  paintLangButton();
+  paintCaptionTitle();
+  updateFindCount();
+  for (const b of content.querySelectorAll('.copy-btn:not(.done) span')) b.textContent = t('Copiar');
+  if (current.path) await liveReload();   // si el Go armó textos, cambian; un .md queda igual
+  else if (current.raw) {
+    const anchor = readingAnchor();
+    await renderRawText(current.raw.bytes, current.raw.name, { silent: true });
+    restoreAnchor(anchor);
+  }
+});
+paintLangButton();
 
 // =========================================================================
 // Varios

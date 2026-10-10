@@ -161,7 +161,8 @@ func TestJSONL(t *testing.T) {
 	// mezcla de objetos y escalares: no es tabla, pero se ve igual
 	res = mustRender(t, "{\"a\":1}\n42\nroto{\n", "mezcla.jsonl")
 	lacks(t, res.HTML, "jsonl mezcla", "<table>")
-	wants(t, res.HTML, "jsonl mezcla", "no se pudieron leer")
+	// una sola línea rota: el verbo en singular ("1 línea no se pudieron leer" era el error de antes)
+	wants(t, res.HTML, "jsonl mezcla", "1 línea no se pudo leer")
 }
 
 // ---- CSV -------------------------------------------------------------------
