@@ -48,40 +48,48 @@ func entorno(kv ...string) func(string) (string, bool) {
 	return func(k string) (string, bool) { v, ok := m[k]; return v, ok }
 }
 
+// interfaz arma la consulta a Windows falsa: devuelve el idioma de la interfaz que se le pase.
+func interfaz(ui string) func() string { return func() string { return ui } }
+
 func TestResolveOrden(t *testing.T) {
 	type caso struct {
 		nombre string
 		c      Choice
 		env    []string
+		sys    string // idioma de la interfaz de Windows ("" = no lo dice)
 		want   Lang
 		src    Source
 	}
 	app := "APP_LANG"
 	cases := []caso{
-		{"flag gana a todo", Choice{Flag: "es", Setting: "en", AppEnv: app}, []string{"APP_LANG=en", "LC_ALL=en_US"}, ES, FromFlag},
-		{"flag auto no elige", Choice{Flag: "auto", Setting: "es"}, nil, ES, FromSetting},
-		{"ajuste gana a la variable", Choice{Setting: "en", AppEnv: app}, []string{"APP_LANG=es"}, EN, FromSetting},
-		{"ajuste auto cae a la variable", Choice{Setting: "auto", AppEnv: app}, []string{"APP_LANG=es"}, ES, FromAppEnv},
-		{"variable inválida no elige", Choice{AppEnv: app}, []string{"APP_LANG=klingon"}, EN, FromDefault},
-		{"variable vacía no elige", Choice{AppEnv: app}, []string{"APP_LANG="}, EN, FromDefault},
-		{"sin nombre de variable no la busca", Choice{}, []string{"=es"}, EN, FromDefault},
-		// El caso que motivó el cambio: una PC en castellano ya no abre la app en castellano por su cuenta.
-		{"nada elegido es inglés", Choice{}, nil, EN, FromDefault},
+		{"flag gana a todo", Choice{Flag: "es", Setting: "en", AppEnv: app}, []string{"APP_LANG=en", "LC_ALL=en_US"}, "en-US", ES, FromFlag},
+		{"flag auto no elige", Choice{Flag: "auto", Setting: "es"}, nil, "en-US", ES, FromSetting},
+		{"ajuste gana a la variable y a Windows", Choice{Setting: "en", AppEnv: app}, []string{"APP_LANG=es"}, "es-ES", EN, FromSetting},
+		{"ajuste auto cae a la variable", Choice{Setting: "auto", AppEnv: app}, []string{"APP_LANG=es"}, "en-US", ES, FromAppEnv},
+		{"variable inválida no elige", Choice{AppEnv: app}, []string{"APP_LANG=klingon"}, "es-ES", ES, FromOS},
+		{"variable vacía no elige", Choice{AppEnv: app}, []string{"APP_LANG="}, "en-US", EN, FromOS},
+		{"sin nombre de variable no la busca", Choice{}, []string{"=es"}, "en-US", EN, FromOS},
+		// Automático: lo que diga la interfaz de Windows.
+		{"Windows en castellano -> castellano", Choice{}, nil, "es-ES", ES, FromOS},
+		{"Windows en castellano de Latinoamérica -> castellano", Choice{}, nil, "es-419", ES, FromOS},
+		{"Windows en inglés -> inglés", Choice{}, nil, "en-US", EN, FromOS},
+		{"Windows en portugués -> inglés", Choice{}, nil, "pt-BR", EN, FromOS},
+		{"Windows sin dato -> inglés por defecto", Choice{}, nil, "", EN, FromDefault},
 	}
 	for _, k := range localeVars {
 		cases = append(cases,
-			caso{"locale " + k + " es", Choice{}, []string{k + "=es_AR.UTF-8"}, ES, FromLocaleEnv},
-			caso{"locale " + k + " C = inglés", Choice{}, []string{k + "=C"}, EN, FromLocaleEnv},
-			caso{"locale " + k + " francés = inglés", Choice{}, []string{k + "=fr_FR.UTF-8"}, EN, FromLocaleEnv},
-			caso{"locale " + k + " en blanco no cuenta", Choice{}, []string{k + "=  "}, EN, FromDefault},
+			caso{"locale " + k + " es gana a Windows en inglés", Choice{}, []string{k + "=es_AR.UTF-8"}, "en-US", ES, FromLocaleEnv},
+			caso{"locale " + k + " C = inglés aunque Windows esté en castellano", Choice{}, []string{k + "=C"}, "es-ES", EN, FromLocaleEnv},
+			caso{"locale " + k + " francés = inglés", Choice{}, []string{k + "=fr_FR.UTF-8"}, "es-ES", EN, FromLocaleEnv},
+			caso{"locale " + k + " en blanco no cuenta", Choice{}, []string{k + "=  "}, "es-ES", ES, FromOS},
 		)
 	}
 	if len(localeVars) >= 2 {
 		a, b := localeVars[0], localeVars[1]
-		cases = append(cases, caso{"manda la primera variable con valor", Choice{}, []string{a + "=es_AR", b + "=en_US"}, ES, FromLocaleEnv})
+		cases = append(cases, caso{"manda la primera variable con valor", Choice{}, []string{a + "=es_AR", b + "=en_US"}, "en-US", ES, FromLocaleEnv})
 	}
 	for _, c := range cases {
-		got, src := resolve(c.c, entorno(c.env...))
+		got, src := resolve(c.c, entorno(c.env...), interfaz(c.sys))
 		if got != c.want || src != c.src {
 			t.Errorf("%s: resolve = %v (%v); quería %v (%v)", c.nombre, got, src, c.want, c.src)
 		}
@@ -93,13 +101,44 @@ func TestLANGSoloFueraDeWindows(t *testing.T) {
 	for _, k := range localeVars {
 		tieneLANG = tieneLANG || k == "LANG"
 	}
-	got, src := resolve(Choice{}, entorno("LANG=es_AR.UTF-8"))
+	got, src := resolve(Choice{}, entorno("LANG=es_AR.UTF-8"), interfaz(""))
 	if tieneLANG && (got != ES || src != FromLocaleEnv) {
 		t.Errorf("fuera de Windows LANG manda: %v %v", got, src)
 	}
 	if !tieneLANG && (got != EN || src != FromDefault) {
 		t.Errorf("en Windows LANG (la pone Git Bash sola) no debe mandar: %v %v", got, src)
 	}
+}
+
+// TestAutomaticoUsaLaInterfazReal corre la decisión automática con la interfaz REAL de la PC de quien
+// corre las pruebas: en una PC con Windows en castellano tiene que dar castellano; en cualquier otra, inglés.
+func TestAutomaticoUsaLaInterfazReal(t *testing.T) {
+	ui := osLanguage()
+	got, src := resolve(Choice{}, entorno(), osLanguage)
+	switch {
+	case ui == "":
+		if got != EN || src != FromDefault {
+			t.Errorf("sin dato de Windows: %v %v", got, src)
+		}
+	case isSpanish(ui):
+		if got != ES || src != FromOS {
+			t.Errorf("Windows en castellano (%s): %v %v", ui, got, src)
+		}
+	default:
+		if got != EN || src != FromOS {
+			t.Errorf("Windows en otro idioma (%s): %v %v", ui, got, src)
+		}
+	}
+}
+
+// TestSistemaNoExplota: la consulta real a Windows no falla y, si contesta, contesta una etiqueta con
+// forma de idioma (es-ES, en-US...).
+func TestSistemaNoExplota(t *testing.T) {
+	ui := osLanguage()
+	if ui != "" && (len(ui) < 2 || strings.ContainsAny(ui, " \x00")) {
+		t.Errorf("etiqueta rara de Windows: %q", ui)
+	}
+	t.Logf("interfaz de Windows: %q", ui)
 }
 
 func TestSetCurrent(t *testing.T) {
@@ -210,7 +249,7 @@ func TestNombres(t *testing.T) {
 	if All[0] != EN || All[1] != ES {
 		t.Error("el selector ofrece el inglés primero")
 	}
-	if FromDefault.String() != "default" || Source(200).String() != "source(200)" {
+	if FromDefault.String() != "default" || FromOS.String() != "os" || Source(200).String() != "source(200)" {
 		t.Error("Source.String")
 	}
 }

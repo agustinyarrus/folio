@@ -11,12 +11,13 @@
 //  2. lo que el usuario dejó elegido en la app         Choice.Setting
 //  3. la variable de la app, p. ej. FOLIO_LANG         Choice.AppEnv
 //  4. LC_ALL / LC_MESSAGES (y LANG, salvo en Windows)
-//  5. nada de lo anterior: inglés.
+//  5. automático: el idioma de la INTERFAZ de Windows. Si es castellano, castellano; si no, inglés.
 //
-// El inglés es el idioma por defecto (pedido del user, 14-oct-2026). Antes, el paso 5 miraba la
-// interfaz y el formato regional de Windows y ponía castellano en cualquier PC en castellano. Ya no:
-// el castellano se pide a propósito (--lang es, el botón de la barra o la variable). LANG no cuenta
-// en Windows porque Git Bash la completa sola con el idioma de la interfaz, y nadie la eligió.
+// Automático (pedido del user, 14-oct-2026): si nadie eligió nada, la app se entera del idioma de
+// Windows y lo sigue. El formato regional NO cuenta: una PC con Windows en inglés abre en inglés
+// aunque tenga formato es-419. El inglés va primero en los selectores y en la ayuda; el castellano,
+// segundo. LANG no cuenta en Windows: Git Bash la completa sola con el idioma de la interfaz, y nadie
+// la eligió.
 //
 // Este archivo es idéntico en todas las apps; lo propio de cada una es su en.json.
 package i18n
@@ -73,7 +74,8 @@ func (l Lang) Tag() string {
 type Source uint8
 
 const (
-	FromDefault   Source = iota // nadie eligió nada: inglés, el idioma por defecto
+	FromDefault   Source = iota // nadie eligió y Windows no dijo nada: inglés
+	FromOS                      // la interfaz de Windows: castellano si es castellano, si no inglés
 	FromLocaleEnv               // LC_ALL / LC_MESSAGES (y LANG fuera de Windows)
 	FromAppEnv                  // la variable propia de la app
 	FromSetting                 // lo que el usuario dejó guardado en la app
@@ -81,7 +83,7 @@ const (
 )
 
 var sourceNames = [...]string{
-	FromDefault: "default", FromLocaleEnv: "locale-env",
+	FromDefault: "default", FromOS: "os", FromLocaleEnv: "locale-env",
 	FromAppEnv: "app-env", FromSetting: "setting", FromFlag: "flag",
 }
 
@@ -103,14 +105,14 @@ type Choice struct {
 // Resolve aplica el orden completo, deja el resultado como idioma actual y lo devuelve junto con
 // su origen.
 func Resolve(c Choice) (Lang, Source) {
-	l, s := resolve(c, os.LookupEnv)
+	l, s := resolve(c, os.LookupEnv, osLanguage)
 	Set(l)
 	return l, s
 }
 
-// resolve es la decisión pura. El entorno llega como función para poder probar cada rama sin
-// depender de las variables de quien corre las pruebas.
-func resolve(c Choice, env func(string) (string, bool)) (Lang, Source) {
+// resolve es la decisión pura. El entorno y la interfaz de Windows llegan como funciones para poder
+// probar cada rama sin depender de la PC de quien corre las pruebas.
+func resolve(c Choice, env func(string) (string, bool), sys func() string) (Lang, Source) {
 	if l, ok := Parse(c.Flag); ok {
 		return l, FromFlag
 	}
@@ -137,8 +139,21 @@ func resolve(c Choice, env func(string) (string, bool)) (Lang, Source) {
 		}
 		return EN, FromLocaleEnv
 	}
-	// Nadie eligió nada: inglés. La interfaz de Windows no decide (ver el comentario del paquete).
+	// Automático: la interfaz de Windows. Castellano -> castellano; cualquier otro idioma -> inglés.
+	if ui := sys(); ui != "" {
+		if isSpanish(ui) {
+			return ES, FromOS
+		}
+		return EN, FromOS
+	}
+	// Nadie eligió y Windows no dijo nada: inglés, el idioma por defecto.
 	return EN, FromDefault
+}
+
+// isSpanish dice si una etiqueta de idioma es castellano ("es-ES", "es-419", "español"...).
+func isSpanish(tag string) bool {
+	l, ok := Parse(tag)
+	return ok && l == ES
 }
 
 // Parse entiende códigos y nombres: "es", "ES", "es-AR", "es_419.UTF-8", "spa", "español",
