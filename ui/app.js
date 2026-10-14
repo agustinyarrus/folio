@@ -964,7 +964,7 @@ window.addEventListener('drop', async (e) => {
 // subtítulos de los formatos convertidos, los avisos y el diálogo de abrir. Por eso, además de
 // re-traducir la página, se vuelve a pedir el documento (anclado al párrafo que se leía).
 // =========================================================================
-const LANG_NAMES = { es: 'Español', en: 'English' };
+const LANG_NAMES = { en: 'English', es: 'Español' };
 function paintLangButton() {
   const cur = I18N.lang, next = cur === 'es' ? 'en' : 'es';
   $('langCode').textContent = cur;

@@ -48,53 +48,40 @@ func entorno(kv ...string) func(string) (string, bool) {
 	return func(k string) (string, bool) { v, ok := m[k]; return v, ok }
 }
 
-func sistema(ui, format string) func() (string, string) {
-	return func() (string, string) { return ui, format }
-}
-
 func TestResolveOrden(t *testing.T) {
 	type caso struct {
 		nombre string
 		c      Choice
 		env    []string
-		ui     string
-		format string
 		want   Lang
 		src    Source
 	}
 	app := "APP_LANG"
 	cases := []caso{
-		{"flag gana a todo", Choice{Flag: "en", Setting: "es", AppEnv: app}, []string{"APP_LANG=es", "LC_ALL=es_AR"}, "es-ES", "es-AR", EN, FromFlag},
-		{"flag auto no elige", Choice{Flag: "auto", Setting: "en"}, nil, "es-ES", "", EN, FromSetting},
-		{"ajuste gana a la variable", Choice{Setting: "es", AppEnv: app}, []string{"APP_LANG=en"}, "en-US", "en-US", ES, FromSetting},
-		{"ajuste auto cae a la variable", Choice{Setting: "auto", AppEnv: app}, []string{"APP_LANG=en"}, "es-ES", "", EN, FromAppEnv},
-		{"variable inválida no elige", Choice{AppEnv: app}, []string{"APP_LANG=klingon"}, "es-419", "", ES, FromOS},
-		{"variable vacía no elige", Choice{AppEnv: app}, []string{"APP_LANG="}, "en-US", "en-US", EN, FromOS},
-		{"sin nombre de variable no la busca", Choice{}, []string{"=en"}, "es-ES", "", ES, FromOS},
+		{"flag gana a todo", Choice{Flag: "es", Setting: "en", AppEnv: app}, []string{"APP_LANG=en", "LC_ALL=en_US"}, ES, FromFlag},
+		{"flag auto no elige", Choice{Flag: "auto", Setting: "es"}, nil, ES, FromSetting},
+		{"ajuste gana a la variable", Choice{Setting: "en", AppEnv: app}, []string{"APP_LANG=es"}, EN, FromSetting},
+		{"ajuste auto cae a la variable", Choice{Setting: "auto", AppEnv: app}, []string{"APP_LANG=es"}, ES, FromAppEnv},
+		{"variable inválida no elige", Choice{AppEnv: app}, []string{"APP_LANG=klingon"}, EN, FromDefault},
+		{"variable vacía no elige", Choice{AppEnv: app}, []string{"APP_LANG="}, EN, FromDefault},
+		{"sin nombre de variable no la busca", Choice{}, []string{"=es"}, EN, FromDefault},
+		// El caso que motivó el cambio: una PC en castellano ya no abre la app en castellano por su cuenta.
+		{"nada elegido es inglés", Choice{}, nil, EN, FromDefault},
 	}
 	for _, k := range localeVars {
 		cases = append(cases,
-			caso{"locale " + k + " es", Choice{}, []string{k + "=es_AR.UTF-8"}, "en-US", "en-US", ES, FromLocaleEnv},
-			caso{"locale " + k + " C = inglés", Choice{}, []string{k + "=C"}, "es-ES", "es-ES", EN, FromLocaleEnv},
-			caso{"locale " + k + " francés = inglés", Choice{}, []string{k + "=fr_FR.UTF-8"}, "es-ES", "es-ES", EN, FromLocaleEnv},
-			caso{"locale " + k + " en blanco no cuenta", Choice{}, []string{k + "=  "}, "es-ES", "", ES, FromOS},
+			caso{"locale " + k + " es", Choice{}, []string{k + "=es_AR.UTF-8"}, ES, FromLocaleEnv},
+			caso{"locale " + k + " C = inglés", Choice{}, []string{k + "=C"}, EN, FromLocaleEnv},
+			caso{"locale " + k + " francés = inglés", Choice{}, []string{k + "=fr_FR.UTF-8"}, EN, FromLocaleEnv},
+			caso{"locale " + k + " en blanco no cuenta", Choice{}, []string{k + "=  "}, EN, FromDefault},
 		)
 	}
 	if len(localeVars) >= 2 {
 		a, b := localeVars[0], localeVars[1]
-		cases = append(cases, caso{"manda la primera variable con valor", Choice{}, []string{a + "=en_US", b + "=es_AR"}, "es-ES", "", EN, FromLocaleEnv})
+		cases = append(cases, caso{"manda la primera variable con valor", Choice{}, []string{a + "=es_AR", b + "=en_US"}, ES, FromLocaleEnv})
 	}
-	cases = append(cases,
-		// El caso que motivó la regla: Windows en inglés con formato regional latinoamericano.
-		caso{"interfaz en inglés + formato es-419", Choice{}, nil, "en-US", "es-419", ES, FromOS},
-		caso{"interfaz en castellano + formato inglés", Choice{}, nil, "es-ES", "en-US", ES, FromOS},
-		caso{"todo inglés", Choice{}, nil, "en-US", "en-GB", EN, FromOS},
-		caso{"portugués va a inglés", Choice{}, nil, "pt-BR", "pt-BR", EN, FromOS},
-		caso{"sin datos del sistema", Choice{}, nil, "", "", EN, FromDefault},
-		caso{"sólo formato", Choice{}, nil, "", "es-MX", ES, FromOS},
-	)
 	for _, c := range cases {
-		got, src := resolve(c.c, entorno(c.env...), sistema(c.ui, c.format))
+		got, src := resolve(c.c, entorno(c.env...))
 		if got != c.want || src != c.src {
 			t.Errorf("%s: resolve = %v (%v); quería %v (%v)", c.nombre, got, src, c.want, c.src)
 		}
@@ -106,11 +93,11 @@ func TestLANGSoloFueraDeWindows(t *testing.T) {
 	for _, k := range localeVars {
 		tieneLANG = tieneLANG || k == "LANG"
 	}
-	got, src := resolve(Choice{}, entorno("LANG=en_US.UTF-8"), sistema("en-US", "es-419"))
-	if tieneLANG && (got != EN || src != FromLocaleEnv) {
+	got, src := resolve(Choice{}, entorno("LANG=es_AR.UTF-8"))
+	if tieneLANG && (got != ES || src != FromLocaleEnv) {
 		t.Errorf("fuera de Windows LANG manda: %v %v", got, src)
 	}
-	if !tieneLANG && (got != ES || src != FromOS) {
+	if !tieneLANG && (got != EN || src != FromDefault) {
 		t.Errorf("en Windows LANG (la pone Git Bash sola) no debe mandar: %v %v", got, src)
 	}
 }
@@ -220,7 +207,10 @@ func TestNombres(t *testing.T) {
 	if ES.Tag() != "es-AR" || EN.Tag() != "en-US" {
 		t.Error("Tag")
 	}
-	if FromOS.String() != "os" || Source(200).String() != "source(200)" {
+	if All[0] != EN || All[1] != ES {
+		t.Error("el selector ofrece el inglés primero")
+	}
+	if FromDefault.String() != "default" || Source(200).String() != "source(200)" {
 		t.Error("Source.String")
 	}
 }
@@ -232,16 +222,4 @@ func TestCatalogoRotoExplota(t *testing.T) {
 		}
 	}()
 	mustCatalog([]byte(`{"a": 1}`))
-}
-
-// TestSistemaNoExplota corre la consulta real al sistema: sólo exige que no falle y que, si Windows
-// contesta, conteste etiquetas con forma de idioma.
-func TestSistemaNoExplota(t *testing.T) {
-	ui, format := osLanguages()
-	for _, tag := range []string{ui, format} {
-		if tag != "" && (len(tag) < 2 || strings.ContainsAny(tag, " \x00")) {
-			t.Errorf("etiqueta rara del sistema: %q", tag)
-		}
-	}
-	t.Logf("sistema: interfaz=%q formato=%q -> %v", ui, format, OSLang())
 }
